@@ -16,7 +16,6 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from processor import process_job, extract_urls_from_text
 from supabase_client import (
     upload_file_to_supabase,
     save_job_to_supabase,
@@ -24,24 +23,44 @@ from supabase_client import (
     list_jobs_from_supabase,
     delete_job_from_supabase,
     update_host_heartbeat,
+    get_host_heartbeat,
 )
+
+IS_VERCEL = bool(os.environ.get("VERCEL"))
 
 BASE_DIR = Path(__file__).parent.resolve()
 JOBS_DIR = BASE_DIR / "jobs_data"
 STATIC_DIR = BASE_DIR / "static"
 DB_PATH = BASE_DIR / "jobs.db"
 TUNNEL_FILE = BASE_DIR / "tunnel_url.txt"
-
-JOBS_DIR.mkdir(parents=True, exist_ok=True)
-STATIC_DIR.mkdir(parents=True, exist_ok=True)
+VERCEL_PUBLIC_URL = "https://agy-news-summarizer-hub.vercel.app"
 
 app = FastAPI(title="Antigravity News Summarizer Hub (สำหรับทีมข่าว 10+ คน)")
-app.mount("/jobs", StaticFiles(directory=str(JOBS_DIR)), name="jobs")
-app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+if STATIC_DIR.exists():
+    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+if not IS_VERCEL:
+    JOBS_DIR.mkdir(parents=True, exist_ok=True)
+    app.mount("/jobs", StaticFiles(directory=str(JOBS_DIR)), name="jobs")
 
 # Limit concurrent heavy AI + video jobs to 2 at a time so Host PC remains smooth
 WORKER_SEMAPHORE = asyncio.Semaphore(2)
 ACTIVE_LOCAL_JOBS: Set[str] = set()
+
+
+def extract_urls_from_text(text: str) -> List[str]:
+    if not text:
+        return []
+    pattern = r"https?://[^\s<>\"')\]+]+"
+    found = re.findall(pattern, text)
+    seen = set()
+    out = []
+    for u in found:
+        u = u.rstrip(".,;!)")
+        if u not in seen:
+            seen.add(u)
+            out.append(u)
+    return out
 
 
 def get_db():
@@ -51,6 +70,8 @@ def get_db():
 
 
 def init_db():
+    if IS_VERCEL:
+        return
     conn = get_db()
     conn.execute("""
         CREATE TABLE IF NOT EXISTS jobs (
@@ -94,6 +115,8 @@ def normalize_url(u: str) -> str:
 
 def sync_row_to_supabase(job_id: str):
     """Read job from local SQLite and push to Supabase."""
+    if IS_VERCEL:
+        return
     try:
         conn = get_db()
         r = conn.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
@@ -184,6 +207,8 @@ async def background_worker(
     output_mode: str,
     image_files: List[str],
 ):
+    from processor import process_job
+
     ACTIVE_LOCAL_JOBS.add(job_id)
     async with WORKER_SEMAPHORE:
         try:
@@ -224,14 +249,7 @@ async def supabase_cloud_poller():
     while True:
         try:
             lan_ip = get_lan_ip()
-            tunnel_url = ""
-            if TUNNEL_FILE.exists():
-                try:
-                    tunnel_url = TUNNEL_FILE.read_text(encoding="utf-8").strip()
-                except Exception:
-                    pass
-
-            await asyncio.to_thread(update_host_heartbeat, f"http://{lan_ip}:8080", tunnel_url)
+            await asyncio.to_thread(update_host_heartbeat, f"http://{lan_ip}:8080", VERCEL_PUBLIC_URL)
             cloud_jobs = await asyncio.to_thread(list_jobs_from_supabase, 30)
 
             for cj in cloud_jobs:
@@ -243,7 +261,6 @@ async def supabase_cloud_poller():
                     job_dir = JOBS_DIR / jid
                     job_dir.mkdir(parents=True, exist_ok=True)
 
-                    # Download any uploaded images from Supabase Storage into job_dir
                     saved_images: List[str] = []
                     for idx, img_url in enumerate(cj.get("uploaded_image_urls") or []):
                         try:
@@ -257,7 +274,6 @@ async def supabase_cloud_poller():
                         except Exception:
                             pass
 
-                    # Insert into local SQLite if not present
                     conn = get_db()
                     conn.execute(
                         """
@@ -300,7 +316,8 @@ async def supabase_cloud_poller():
 
 @app.on_event("startup")
 async def on_startup():
-    asyncio.create_task(supabase_cloud_poller())
+    if not IS_VERCEL:
+        asyncio.create_task(supabase_cloud_poller())
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -311,14 +328,22 @@ async def index():
 
 @app.get("/api/system-info")
 async def system_info():
-    lan_ip = get_lan_ip()
-    tunnel_url = ""
-    if TUNNEL_FILE.exists():
-        try:
-            tunnel_url = TUNNEL_FILE.read_text(encoding="utf-8").strip()
-        except Exception:
-            pass
+    if IS_VERCEL:
+        hb = await asyncio.to_thread(get_host_heartbeat)
+        jobs = await asyncio.to_thread(list_jobs_from_supabase, 100)
+        counts = {"queued": 0, "processing": 0, "completed": 0, "failed": 0}
+        for j in jobs:
+            st = j.get("status", "queued")
+            counts[st] = counts.get(st, 0) + 1
+        return {
+            "lan_url": hb.get("lan_url") or "http://localhost:8080",
+            "local_url": "http://localhost:8080",
+            "tunnel_url": VERCEL_PUBLIC_URL,
+            "host_online": hb.get("online", True),
+            "stats": counts,
+        }
 
+    lan_ip = get_lan_ip()
     conn = get_db()
     rows = conn.execute("SELECT status, COUNT(*) as cnt FROM jobs GROUP BY status").fetchall()
     conn.close()
@@ -327,7 +352,7 @@ async def system_info():
     return {
         "lan_url": f"http://{lan_ip}:8080",
         "local_url": "http://localhost:8080",
-        "tunnel_url": tunnel_url,
+        "tunnel_url": VERCEL_PUBLIC_URL,
         "host_online": True,
         "stats": {
             "queued": counts.get("queued", 0),
@@ -343,6 +368,23 @@ async def check_duplicate(url: str):
     if not url.strip():
         return {"duplicate": False}
     norm = normalize_url(url)
+
+    if IS_VERCEL:
+        jobs = await asyncio.to_thread(list_jobs_from_supabase, 80)
+        for j in jobs:
+            for existing_u in j.get("urls", []):
+                if normalize_url(existing_u) == norm:
+                    res = j.get("result") or {}
+                    return {
+                        "duplicate": True,
+                        "job_id": j.get("id"),
+                        "employee_name": j.get("employee_name", "พนักงาน"),
+                        "created_at": j.get("created_at", ""),
+                        "status": j.get("status", ""),
+                        "headline": res.get("headline", "งานที่ส่งไว้แล้ว"),
+                    }
+        return {"duplicate": False}
+
     conn = get_db()
     rows = conn.execute("SELECT id, employee_name, urls_json, created_at, status, result_json FROM jobs ORDER BY created_at DESC LIMIT 100").fetchall()
     conn.close()
@@ -383,6 +425,39 @@ async def submit_job(
         raise HTTPException(status_code=400, detail="กรุณาใส่ลิงก์คลิป/ข่าว, ข้อความ หรืออัปโหลดรูปภาพอย่างน้อย 1 อย่าง")
 
     job_id = datetime.datetime.now().strftime("%Y%m%d_%H%M%S_") + uuid.uuid4().hex[:6]
+    now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    if IS_VERCEL:
+        uploaded_image_urls: List[str] = []
+        for idx, img in enumerate(valid_images):
+            ext = os.path.splitext(img.filename)[1].lower() or ".png"
+            if ext not in (".jpg", ".jpeg", ".png", ".webp", ".gif"):
+                ext = ".png"
+            fname = f"uploaded_{idx + 1}{ext}"
+            content = await img.read()
+            if content:
+                ctype = "image/png" if ext == ".png" else "image/jpeg"
+                pub_url = await asyncio.to_thread(upload_file_to_supabase, f"{job_id}/{fname}", content, ctype)
+                uploaded_image_urls.append(pub_url)
+
+        job_doc = {
+            "id": job_id,
+            "employee_name": employee_name.strip() or "พนักงาน",
+            "urls": urls,
+            "raw_text": raw_text.strip(),
+            "focus_instruction": focus_instruction.strip(),
+            "output_mode": output_mode,
+            "status": "queued",
+            "progress_text": "ส่งเข้าคิว Cloud (Supabase) แล้ว รอเครื่องแม่ดึงไปประมวลผล...",
+            "progress_pct": 8,
+            "result": None,
+            "uploaded_image_urls": uploaded_image_urls,
+            "created_at": now_str,
+            "completed_at": None,
+        }
+        await asyncio.to_thread(save_job_to_supabase, job_doc)
+        return {"ok": True, "job_id": job_id}
+
     job_dir = JOBS_DIR / job_id
     job_dir.mkdir(parents=True, exist_ok=True)
 
@@ -398,7 +473,6 @@ async def submit_job(
             fpath.write_bytes(content)
             saved_images.append(fname)
 
-    now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     ACTIVE_LOCAL_JOBS.add(job_id)
     conn = get_db()
     conn.execute(
@@ -442,6 +516,12 @@ async def submit_job(
 
 @app.get("/api/jobs")
 async def list_jobs(employee: Optional[str] = None, limit: int = 50):
+    if IS_VERCEL:
+        jobs = await asyncio.to_thread(list_jobs_from_supabase, limit)
+        if employee and employee.strip() and employee != "ALL":
+            jobs = [j for j in jobs if j.get("employee_name") == employee.strip()]
+        return {"jobs": jobs}
+
     conn = get_db()
     if employee and employee.strip() and employee != "ALL":
         rows = conn.execute(
@@ -465,6 +545,12 @@ async def list_jobs(employee: Optional[str] = None, limit: int = 50):
 
 @app.get("/api/jobs/{job_id}")
 async def get_job(job_id: str):
+    if IS_VERCEL:
+        j = await asyncio.to_thread(get_job_from_supabase, job_id)
+        if not j:
+            raise HTTPException(status_code=404, detail="ไม่พบงานนี้")
+        return j
+
     conn = get_db()
     r = conn.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
     conn.close()
@@ -485,6 +571,18 @@ class UpdateJobBody(BaseModel):
 
 @app.put("/api/jobs/{job_id}")
 async def update_job_text(job_id: str, body: UpdateJobBody):
+    if IS_VERCEL:
+        j = await asyncio.to_thread(get_job_from_supabase, job_id)
+        if not j:
+            raise HTTPException(status_code=404, detail="ไม่พบงานนี้")
+        res = j.get("result") or {}
+        res["raw_news"] = body.raw_news
+        if body.headline:
+            res["headline"] = body.headline
+        j["result"] = res
+        await asyncio.to_thread(save_job_to_supabase, j)
+        return {"ok": True}
+
     conn = get_db()
     r = conn.execute("SELECT result_json FROM jobs WHERE id = ?", (job_id,)).fetchone()
     if not r:
@@ -503,6 +601,10 @@ async def update_job_text(job_id: str, body: UpdateJobBody):
 
 @app.delete("/api/jobs/{job_id}")
 async def delete_job(job_id: str):
+    if IS_VERCEL:
+        await asyncio.to_thread(delete_job_from_supabase, job_id)
+        return {"ok": True}
+
     conn = get_db()
     conn.execute("DELETE FROM jobs WHERE id = ?", (job_id,))
     conn.commit()

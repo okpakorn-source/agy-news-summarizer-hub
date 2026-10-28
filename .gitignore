@@ -5,3 +5,5 @@ jobs.db
 tunnel_url.txt
 .vercel/
 .env
+
+.vercel

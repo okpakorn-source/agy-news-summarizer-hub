@@ -1,0 +1,10 @@
+jobs_data/
+jobs.db
+tunnel_url.txt
+__pycache__/
+*.pyc
+.git/
+.env
+api/
+sync_seed_to_supabase.py
+seed_db.py
