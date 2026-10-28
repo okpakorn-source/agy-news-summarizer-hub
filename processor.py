@@ -90,17 +90,19 @@ def build_contact_sheets(frames_dir: Path, output_dir: Path, max_sheets: int = 4
     return sheet_paths
 
 
-def scrape_webpage_text(url: str) -> Dict[str, Any]:
-    """Fallback/article scraper for news websites or public posts."""
+def scrape_webpage_text(url: str, job_dir: Optional[Path] = None, image_files: Optional[List[str]] = None) -> Dict[str, Any]:
+    """Fallback/article scraper for news websites or public posts (including Facebook share/p)."""
+    is_fb = any(d in url.lower() for d in ("facebook.com", "fb.com", "fb.watch"))
     headers = {
         "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+            "Twitterbot/1.0"
+            if is_fb
+            else "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
         ),
         "Accept-Language": "th-TH,th;q=0.9,en-US;q=0.8,en;q=0.7",
     }
     try:
-        resp = requests.get(url, headers=headers, timeout=15)
+        resp = requests.get(url, headers=headers, allow_redirects=True, timeout=15)
         resp.encoding = resp.apparent_encoding or "utf-8"
         soup = BeautifulSoup(resp.text, "html.parser")
 
@@ -116,6 +118,20 @@ def scrape_webpage_text(url: str) -> Dict[str, Any]:
         meta_desc = soup.find("meta", property="og:description") or soup.find("meta", attrs={"name": "description"})
         if meta_desc and meta_desc.get("content"):
             og_desc = meta_desc["content"].strip()
+
+        og_image = ""
+        meta_img = soup.find("meta", property="og:image") or soup.find("meta", attrs={"name": "twitter:image"})
+        if meta_img and meta_img.get("content"):
+            og_image = meta_img["content"].strip()
+            if og_image and job_dir is not None and image_files is not None:
+                try:
+                    ir = requests.get(og_image, headers={"User-Agent": "Mozilla/5.0"}, timeout=15)
+                    if ir.status_code == 200 and ir.content:
+                        fname = f"uploaded_og_{len(image_files) + 1}.jpg"
+                        (job_dir / fname).write_bytes(ir.content)
+                        image_files.append(fname)
+                except Exception:
+                    pass
 
         for tag in soup(["script", "style", "noscript", "header", "footer", "nav", "aside"]):
             tag.decompose()
@@ -196,7 +212,38 @@ async def process_job(
         for idx, url in enumerate(urls):
             progress_cb(f"กำลังดึงข้อมูลจากลิงก์ ({idx + 1}/{len(urls)})...", 20)
             if is_video_url(url):
-                # Try downloading with yt-dlp
+                # Also try extracting Thai subtitles/auto-captions for fast, complete transcript of long videos
+                await run_subprocess(
+                    ["yt-dlp", "--write-auto-sub", "--write-sub", "--sub-lang", "th", "--skip-download", "-o", "sub", url],
+                    cwd=job_dir,
+                    timeout=30,
+                )
+                vtt_file = job_dir / "sub.th.vtt"
+                if vtt_file.exists():
+                    try:
+                        vtt_raw = vtt_file.read_text(encoding="utf-8", errors="ignore")
+                        t_out, last_line, cur_t = [], "", ""
+                        for ln in vtt_raw.splitlines():
+                            if "-->" in ln:
+                                cur_t = ln.split("-->")[0].strip()[:8]
+                                continue
+                            cln = re.sub(r"<[^>]+>", "", ln).strip()
+                            if not cln or cln.startswith(("WEBVTT", "Kind:", "Language:")):
+                                continue
+                            if cln != last_line:
+                                t_out.append((cur_t[:5], cln))
+                                last_line = cln
+                        blocks: Dict[str, List[str]] = {}
+                        for tm, tx in t_out:
+                            blocks.setdefault(tm, []).append(tx)
+                        (job_dir / "transcript.txt").write_text(
+                            "\n\n".join(f"[{m}] {' '.join(blocks[m])}" for m in sorted(blocks.keys())),
+                            encoding="utf-8",
+                        )
+                    except Exception:
+                        pass
+
+                # Try downloading video (limit to <=15 min or first 10 min if huge)
                 cmd = [
                     "yt-dlp",
                     "--write-info-json",
@@ -259,11 +306,11 @@ async def process_job(
                     all_contact_sheets.extend(sheets)
                 else:
                     # Fallback to webpage scrape if yt-dlp couldn't find a video (e.g. Facebook text/photo share link)
-                    article_data = await asyncio.to_thread(scrape_webpage_text, url)
+                    article_data = await asyncio.to_thread(scrape_webpage_text, url, job_dir, image_files)
                     extracted_meta["articles"].append(article_data)
             else:
                 progress_cb(f"กำลังดึงเนื้อหาจากหน้าเว็บข่าว ({idx + 1}/{len(urls)})...", 35)
-                article_data = await asyncio.to_thread(scrape_webpage_text, url)
+                article_data = await asyncio.to_thread(scrape_webpage_text, url, job_dir, image_files)
                 extracted_meta["articles"].append(article_data)
 
     # Save metadata summary into job_dir/job_context.json
@@ -275,6 +322,8 @@ async def process_job(
 
     # Build instructions for Antigravity Agent
     files_to_inspect = ["job_context.json"]
+    if (job_dir / "transcript.txt").exists():
+        files_to_inspect.append("transcript.txt")
     for s in all_contact_sheets:
         files_to_inspect.append(s)
     if has_audio_file:
@@ -284,7 +333,10 @@ async def process_job(
 
     files_list_str = ", ".join(f"`{fn}`" for fn in files_to_inspect)
 
-    skill_path = Path(r"C:\Users\User\.gemini\config\skills\viral-news-writer\SKILL.md")
+    if output_mode == "viral_3_para":
+        skill_path = Path(r"C:\Users\User\.gemini\config\skills\viral-news-writer\SKILL.md")
+    else:
+        skill_path = Path(r"C:\Users\User\.gemini\config\skills\viral-news-digest\SKILL.md")
     skill_content = ""
     if skill_path.exists():
         try:
@@ -295,25 +347,29 @@ async def process_job(
     if output_mode == "strict_clip_only":
         mode_instruction = (
             "โหมด: ใช้เฉพาะข้อมูลที่ได้จากคลิป/ภาพ/ข้อความต้นทาง 100% เท่านั้น "
-            "(ห้ามใช้ search_web ค้นหาข่าวภายนอกมาปนเด็ดขาด) แล้วนำข้อเท็จจริงที่ได้มาเขียนด้วยสกิล `viral-news-writer` "
-            "(สไตล์ฮุคไวรัล ประโยคสั้นกระชับ 3 ย่อหน้าสั้น สำหรับคนไถฟีดเร็ว)"
+            "(ห้ามใช้ search_web ค้นหาข่าวภายนอกมาปนเด็ดขาด) แล้วนำข้อเท็จจริงที่ได้มาสรุปใจความข่าวด้วยสกิลหลัก `viral-news-digest` "
+            "(โครงสร้าง 3 บล็อกเรียงบรรทัด: บล็อก 1 บรรทัดเปิดฮุค 1 บรรทัดเดี่ยว + บล็อก 2 บรรทัดปูแก่นเรื่องและแจกแจงดีเทลทีละบรรทัด + บล็อก 3 บรรทัดปิดท้ายขยี้คุณค่าและเปรียบเทียบ Before/After)"
+        )
+    elif output_mode == "viral_3_para":
+        mode_instruction = (
+            "โหมด: เล่าเรื่องไวรัล 3 ย่อหน้าสั้น (`viral-news-writer` — จับ 1 ประเด็นบริสุทธิ์ที่เข้ากัน 100% ร้อยเรียงเป็นเหตุเป็นผล อ่านง่ายจนจบจริง ห้ามตบสรุปสั่งสอนแบบเรียงความ)"
         )
     else:
         mode_instruction = (
-            "โหมดมาตรฐาน (2 ขั้นตอนอัตโนมัติ: สกัดข้อเท็จจริง 4-Lock -> เขียนข่าวด้วยสกิล `viral-news-writer` สไตล์ฮุคไวรัล ประโยคสั้นกระชับ สำหรับคนไถฟีดเร็ว):\n"
-            "  • ขั้นตอนที่ 1 (สกัดข้อเท็จจริง): แกะภาพ-เสียงจากคลิป/ภาพจริง หรือสกัดข้อเท็จจริงจากเว็บข่าว ร่วมกับค้นเชื่อมโยงบริบทต้นเรื่องภายใต้กฎ 4-Lock Verification แล้วบันทึกข้อเท็จจริงดิบไว้ในช่อง `visual_audio_breakdown` และ `context_connected`\n"
-            "  • ขั้นตอนที่ 2 (เขียนข่าวด้วยสกิล `viral-news-writer` ก่อนส่งผลลัพธ์): นำข้อเท็จจริงทั้งหมดมาเรียบเรียงใหม่ด้วยภาษาของเราเอง 100% (ห้ามคัดลอกรูปประโยคต้นทางเกิน 4 คำติดกัน และห้ามติดชื่อสำนักข่าวต้นทาง) ตามมาตรฐาน 'สไตล์ฮุคไวรัล ประโยคสั้นกระชับ (สำหรับคนไถฟีดเร็ว)' ในสกิล `viral-news-writer` ด้านล่างนี้:\n"
-            "    - ย่อหน้าที่ 1: เปิดด้วยชื่อตัวเอกในเครื่องหมายคำพูด \"...\" ตามด้วยฮุคเหตุการณ์หลักหรือมุมสำคัญทันที พร้อมเชื่อมบริบทต้นเรื่องและตัวเลข/ข้อเท็จจริงสำคัญให้ครบในย่อหน้าแรก\n"
-            "    - ย่อหน้าที่ 2: ขยายสาเหตุ จุดเปลี่ยน หรือรายละเอียดฉากเหตุการณ์จริง/คำยืนยันจริงอย่างกระชับ ตรงประเด็น ไร้คำเฟ้อ\n"
-            "    - ย่อหน้าที่ 3: ขมวดปมสถานการณ์ล่าสุด พร้อมชูความเข้มแข็ง ความกตัญญู ความรับผิดชอบ หรือน้ำใจเชิงบวก (Positive Framing & Policy Safe ไม่โจมตีใคร)"
+            "โหมดมาตรฐาน (2 ขั้นตอนอัตโนมัติ: ค้นข้อมูลเชิงลึกรอบด้าน 4-Lock -> สรุปใจความข่าวเจาะลึกรายบุคคล/รายประเด็นด้วยสกิลหลัก `viral-news-digest`):\n"
+            "  • ขั้นตอนที่ 1 (สกัดข้อเท็จจริง + ค้นข้อมูลเชิงลึกเบื้องหลัง `search_web`): ห้ามหยุดแค่ข้อมูลผิวเผินในลิงก์เดียว! ต้องใช้ `search_web` ค้นข้อมูลเชิงลึกของบุคคลและต้นสายปลายเหตุในข่าว (เช่น แต่ละคนคือใคร มีที่มาอย่างไร ทำไมถึงเกิดเรื่องนี้ ตัวเลขแต่ละก้อนมาจากใคร) เหมือนต้นแบบข่าวบุ๋มที่เจาะลึกว่าลูกบุญธรรมทั้ง 9 คนแต่ละคนชื่ออะไร เรียนจบที่ไหน ทำงานอะไร\n"
+            "  • ขั้นตอนที่ 2 (สรุปใจความข่าวด้วยสกิลหลัก `viral-news-digest` ก่อนส่งผลลัพธ์): นำข้อมูลเชิงลึกทั้งหมดมาเรียบเรียงด้วยภาษามนุษย์ของเราเอง 100% (ห้ามเล่าแบบรายงานข่าวตามวันที่ และห้ามก๊อปคำแถลงการณ์ข้อ 1-2-3) ตามโครงสร้าง 3 บล็อกด้านล่างนี้:\n"
+            "    - บล็อกที่ 1 (บรรทัดเปิดฮุค 1 บรรทัดเดี่ยว): เปิดด้วยประโยคสั้นๆ 1 บรรทัดที่ชูจุดเปรียบเทียบ/ความขัดแย้งเชิงบวก หรือแก่นที่ทัชใจที่สุด + ชื่อตัวเอก แล้วเว้นบรรทัดว่าง (`\\n\\n`)\n"
+            "    - บล็อกที่ 2 (บรรทัดปูแก่นเรื่อง + เจาะลึกรายบุคคล/รายประเด็นทีละบรรทัด): บรรทัดแรกสรุปที่มาของเรื่อง จากนั้นขึ้นบรรทัดใหม่เจาะลึกทีละคน/ทีละประเด็นสำคัญ (`[ชื่อคน/ประเด็นหลัก] + [ข้อมูลเชิงลึกเฉพาะเจาะจงที่ข่าวทั่วไปไม่ได้บอกครบ] + [ผลลัพธ์/สถานะ]`) โดยไม่เรียงเป็นรายงานตามวันที่และไม่ใส่เครื่องหมายหัวข้อ (`-` หรือ `•`) ปิดท้ายบล็อกด้วยบรรทัดสรุปภาพรวมส่วนที่เหลือ (`และยังมี...`)\n"
+            "    - บล็อกที่ 3 (บรรทัดปิดท้ายขยี้คุณค่าและเปรียบเทียบ Before -> After): เว้นบรรทัดว่าง (`\\n\\n`) แล้วปิดท้าย 1–2 บรรทัดด้วยคำสะท้อนคุณค่าจริงใจแบบภาษามนุษย์ (`นี่แหละ...`) พร้อมภาพเปรียบเทียบจากจุดเดิม (Before) สู่ผลลัพธ์ที่เปลี่ยนไป (After)"
         )
 
     focus_str = f"\nประเด็นที่พนักงานสั่งเน้นเป็นพิเศษ: {focus_instruction}\n" if focus_instruction else ""
 
-    prompt = f"""คุณคือระบบวิเคราะห์และเขียนข่าวไวรัลความแม่นยำสูง (4-Lock Fact Extraction + `viral-news-writer` Skill)
+    prompt = f"""คุณคือระบบวิเคราะห์และสรุปใจความข่าวไวรัลความแม่นยำสูง (4-Lock Fact Extraction + `viral-news-digest` Skill)
 ในโฟลเดอร์งาน `{job_dir.as_posix()}` มีไฟล์ที่ดึงมาจากต้นทางเรียบร้อยแล้ว ได้แก่: {files_list_str}
 
-=== คู่มือสกิลการเขียนข่าวบังคับ (`viral-news-writer`) ===
+=== คู่มือสกิลสรุปใจความข่าวหลักบังคับ (`viral-news-digest`) ===
 {skill_content}
 =========================================================
 
@@ -335,13 +391,13 @@ async def process_job(
    - Lock 3 (3-Point Match): ข้อมูลที่ค้นมาต้องตรงกับภาพและเสียงในคลิปครบ 3 จุด (บุคคลเดียวกัน + ชุด/สถานที่/บรรยากาศตรงกัน + ช่วงเวลาเดียวกัน)
    - Lock 4 (Audit Tag): ระบุที่มาและการตรวจสอบความแม่นยำให้ชัดเจน
 
-เมื่อวิเคราะห์และเขียนข่าวด้วยสกิล `viral-news-writer` เสร็จแล้ว ให้บันทึกผลลัพธ์เป็นไฟล์ JSON ชื่อ `result.json` ลงในโฟลเดอร์ `{job_dir.as_posix()}/result.json` ด้วยเครื่องมือ `write_file` (และพิมพ์ JSON เดียวกันออกมาเป็นคำตอบสุดท้ายด้วย) โดยมีโครงสร้าง JSON ดังนี้เท่านั้น:
+เมื่อวิเคราะห์และสรุปใจความข่าวด้วยสกิล `viral-news-digest` เสร็จแล้ว ให้บันทึกผลลัพธ์เป็นไฟล์ JSON ชื่อ `result.json` ลงในโฟลเดอร์ `{job_dir.as_posix()}/result.json` ด้วยเครื่องมือ `write_file` (และพิมพ์ JSON เดียวกันออกมาเป็นคำตอบสุดท้ายด้วย) โดยมีโครงสร้าง JSON ดังนี้เท่านั้น:
 {{
   "headline": "หัวข้อสรุปประเด็นข่าวสั้นๆ เข้าใจทันที",
-  "raw_news": "เนื้อข่าวที่เขียนเสร็จสมบูรณ์ด้วยสกิล viral-news-writer (สไตล์ฮุคไวรัล ประโยคสั้นกระชับ 3 ย่อหน้าสั้น สำหรับคนไถฟีดเร็ว ตัดคำเฟ้อ 100% เขียนใหม่ด้วยภาษาเราเอง 100%)",
+  "raw_news": "เนื้อข่าวที่สรุปเสร็จสมบูรณ์ด้วยสกิลหลัก viral-news-digest (โครงสร้าง 3 บล็อกเรียงบรรทัด: บรรทัดฮุคเดี่ยว + บรรทัดปูแก่นและแจกแจงดีเทลทีละบรรทัด + บรรทัดปิดท้ายขยี้คุณค่าและเปรียบเทียบ Before/After)",
   "visual_audio_breakdown": "สรุปข้อเท็จจริงดิบที่สกัดได้จากภาพ-เสียงในคลิปหรือบทความต้นทางแบบละเอียด",
   "context_connected": "ข้อมูลบริบทต้นเรื่องหรือชื่อเต็มที่ค้นเชื่อมโยงเพิ่มเติม (หากไม่ได้ค้นเพิ่มให้ระบุว่า 'ใช้ข้อมูลจากต้นฉบับในคลิป/โพสต์ 100%')",
-  "audit_tag": "✅ [ที่มาข้อมูล: ระบุชัดเจนว่าแกะจากภาพ-เสียงในคลิป/ต้นทาง 100% และ/หรือ เชื่อมโยงข่าวจริงวันที่เท่าไหร่ + เรียบเรียงด้วยสกิล viral-news-writer]"
+  "audit_tag": "✅ [ที่มาข้อมูล: ระบุชัดเจนว่าแกะจากภาพ-เสียงในคลิป/ต้นทาง 100% และ/หรือ เชื่อมโยงข่าวจริงวันที่เท่าไหร่ + สรุปด้วยสกิลหลัก viral-news-digest]"
 }}"""
 
     cmd_agy = [
