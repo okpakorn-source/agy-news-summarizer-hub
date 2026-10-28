@@ -7,9 +7,16 @@ import socket
 import sqlite3
 import asyncio
 import datetime
+import subprocess
 import requests
 from pathlib import Path
 from typing import List, Optional, Set
+
+TH_TZ = datetime.timezone(datetime.timedelta(hours=7))
+
+
+def now_th() -> datetime.datetime:
+    return datetime.datetime.now(TH_TZ)
 
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.responses import HTMLResponse
@@ -146,7 +153,7 @@ def sync_row_to_supabase(job_id: str):
 def update_job_progress(job_id: str, status: str, text: str, pct: int, result_dict: Optional[dict] = None):
     conn = get_db()
     if result_dict is not None:
-        now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        now_str = now_th().strftime("%Y-%m-%d %H:%M:%S")
         conn.execute(
             "UPDATE jobs SET status=?, progress_text=?, progress_pct=?, result_json=?, completed_at=? WHERE id=?",
             (status, text, pct, json.dumps(result_dict, ensure_ascii=False), now_str, job_id),
@@ -230,16 +237,21 @@ async def background_worker(
             result = await asyncio.to_thread(upload_job_media_to_cloud, job_id, job_dir, result)
             await asyncio.to_thread(update_job_progress, job_id, "completed", "สรุปเนื้อข่าวเสร็จสมบูรณ์!", 100, result)
         except Exception as e:
+            s_err = str(e)
+            if isinstance(e, subprocess.TimeoutExpired) or "timed out" in s_err.lower():
+                short_err = "ใช้เวลาค้นหาและประมวลผลเกินกำหนด (Timeout) กรุณาลองส่งใหม่อีกครั้ง"
+            else:
+                short_err = s_err[:220] + "..." if len(s_err) > 220 else s_err
             err_res = {
                 "headline": "เกิดข้อผิดพลาดในการประมวลผล",
-                "raw_news": f"ระบบพบข้อผิดพลาด: {str(e)}",
+                "raw_news": f"ระบบพบข้อผิดพลาด: {short_err}",
                 "visual_audio_breakdown": "-",
                 "context_connected": "-",
                 "audit_tag": "⚠️ กรุณาตรวจสอบลิงก์หรือลองใหม่อีกครั้ง",
                 "contact_sheets": [],
                 "uploaded_images": [f"/jobs/{job_id}/{img}" for img in image_files],
             }
-            await asyncio.to_thread(update_job_progress, job_id, "failed", f"ผิดพลาด: {str(e)}", 100, err_res)
+            await asyncio.to_thread(update_job_progress, job_id, "failed", f"ผิดพลาด: {short_err}", 100, err_res)
         finally:
             ACTIVE_LOCAL_JOBS.discard(job_id)
 
@@ -291,7 +303,7 @@ async def supabase_cloud_poller():
                             "เครื่องแม่รับงานจาก Cloud แล้ว กำลังเริ่มประมวลผล...",
                             10,
                             None,
-                            cj.get("created_at") or datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                            cj.get("created_at") or now_th().strftime("%Y-%m-%d %H:%M:%S"),
                             None,
                         ),
                     )
@@ -424,8 +436,8 @@ async def submit_job(
     if not urls and not raw_text.strip() and not valid_images:
         raise HTTPException(status_code=400, detail="กรุณาใส่ลิงก์คลิป/ข่าว, ข้อความ หรืออัปโหลดรูปภาพอย่างน้อย 1 อย่าง")
 
-    job_id = datetime.datetime.now().strftime("%Y%m%d_%H%M%S_") + uuid.uuid4().hex[:6]
-    now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    job_id = now_th().strftime("%Y%m%d_%H%M%S_") + uuid.uuid4().hex[:6]
+    now_str = now_th().strftime("%Y-%m-%d %H:%M:%S")
 
     if IS_VERCEL:
         uploaded_image_urls: List[str] = []

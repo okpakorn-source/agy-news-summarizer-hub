@@ -7,6 +7,7 @@ import shutil
 import asyncio
 import datetime
 import subprocess
+import urllib.parse
 from pathlib import Path
 from typing import List, Dict, Any, Callable, Optional
 
@@ -42,8 +43,11 @@ def extract_urls_from_text(text: str) -> List[str]:
 
 def is_video_url(url: str) -> bool:
     u_low = url.lower()
+    if any(d in u_low for d in ("facebook.com", "fb.com")):
+        # Text/photo post URLs should go straight to webpage + embed scraper instead of waiting on yt-dlp
+        if any(p in u_low for p in ("/posts/", "/share/p/", "/permalink.php", "/photo", "story.php")):
+            return False
     if any(d in u_low for d in VIDEO_DOMAINS):
-        # Facebook photo posts or pure text posts might still be handled by yt-dlp or fallback to web scrape
         return True
     return False
 
@@ -146,6 +150,34 @@ def scrape_webpage_text(url: str, job_dir: Optional[Path] = None, image_files: O
                 unique_paras.append(p)
 
         body_text = "\n\n".join(unique_paras[:40])
+
+        # For Facebook posts (/posts/pfbid..., /share/p/...), fetch full untruncated text via Facebook's post embed plugin
+        if is_fb and len(body_text) < 200:
+            try:
+                clean_fb_url = re.sub(r"[?&](rdid|share_url|utm_[^=&]+|_rdr)=[^&]*", "", resp.url).rstrip("?&/#")
+                embed_url = (
+                    f"https://www.facebook.com/plugins/post.php?href="
+                    f"{urllib.parse.quote(clean_fb_url, safe='')}&show_text=true&width=500"
+                )
+                er = requests.get(embed_url, headers=headers, timeout=15)
+                if er.status_code == 200:
+                    esoup = BeautifulSoup(er.content.decode("utf-8", errors="replace"), "html.parser")
+                    fb_blocks = []
+                    for div in esoup.find_all("div", class_="text_exposed_root"):
+                        for hide in div.find_all(class_="text_exposed_hide"):
+                            hide.decompose()
+                        for br in div.find_all("br"):
+                            br.replace_with("\n")
+                        for p in div.find_all("p"):
+                            p.insert_after("\n\n")
+                        txt = div.get_text().strip()
+                        if txt and txt not in fb_blocks:
+                            fb_blocks.append(txt)
+                    if fb_blocks:
+                        body_text = "\n\n".join(fb_blocks)
+            except Exception:
+                pass
+
         return {
             "url": url,
             "title": html.unescape(title),
@@ -390,6 +422,7 @@ async def process_job(
    - Lock 2 (Clip Genre Gate): ถ้าเป็นคลิปคนดัง/ข่าวใหญ่/ตัดจากรายการ ให้ค้นเชื่อมโยงต้นเรื่องและชื่อ-นามสกุลเต็ม แต่ถ้าเป็นคลิปชาวบ้านทั่วไป/กล้องวงจรปิดที่ไม่มีสำนักข่าวรายงานเคสเดียวกันเป๊ะๆ ห้ามนำข่าวคล้ายกันจากเคสอื่นมาสวมทับเด็ดขาด ให้ใช้เฉพาะสิ่งที่เห็นและได้ยินในคลิป 100%
    - Lock 3 (3-Point Match): ข้อมูลที่ค้นมาต้องตรงกับภาพและเสียงในคลิปครบ 3 จุด (บุคคลเดียวกัน + ชุด/สถานที่/บรรยากาศตรงกัน + ช่วงเวลาเดียวกัน)
    - Lock 4 (Audit Tag): ระบุที่มาและการตรวจสอบความแม่นยำให้ชัดเจน
+   - Speed Guardrail (ป้องกัน Timeout): หากใน `job_context.json` มีเนื้อหาครบถ้วนอยู่แล้ว หรือต้องการค้นบริบทเสริมด้วย `search_web` ให้ค้นหาอย่างกระชับไม่เกิน 1-2 ครั้งเท่านั้น แล้วเขียนไฟล์ `result.json` ทันที ห้ามค้นหาวนซ้ำเกิน 2 ครั้งเด็ดขาด
 
 เมื่อวิเคราะห์และสรุปใจความข่าวด้วยสกิล `viral-news-digest` เสร็จแล้ว ให้บันทึกผลลัพธ์เป็นไฟล์ JSON ชื่อ `result.json` ลงในโฟลเดอร์ `{job_dir.as_posix()}/result.json` ด้วยเครื่องมือ `write_file` (และพิมพ์ JSON เดียวกันออกมาเป็นคำตอบสุดท้ายด้วย) โดยมีโครงสร้าง JSON ดังนี้เท่านั้น:
 {{
@@ -416,7 +449,7 @@ async def process_job(
         "--print", prompt,
     ]
 
-    agy_res = await run_subprocess(cmd_agy, cwd=job_dir, timeout=240)
+    agy_res = await run_subprocess(cmd_agy, cwd=job_dir, timeout=300)
     progress_cb("กำลังจัดรูปแบบผลลัพธ์และบันทึกข้อมูล...", 92)
 
     result_data: Optional[Dict[str, Any]] = None
