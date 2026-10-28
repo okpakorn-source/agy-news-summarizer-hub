@@ -72,6 +72,19 @@ def save_job_to_supabase(job_dict: Dict[str, Any]) -> bool:
     return resp.status_code in (200, 201, 204)
 
 
+def _parse_val(val: Any) -> Optional[Dict[str, Any]]:
+    if isinstance(val, dict):
+        return val
+    if isinstance(val, str):
+        try:
+            parsed = json.loads(val)
+            if isinstance(parsed, dict):
+                return parsed
+        except Exception:
+            pass
+    return None
+
+
 def get_job_from_supabase(job_id: str) -> Optional[Dict[str, Any]]:
     key = f"{JOB_PREFIX}{job_id}"
     url = f"{SUPABASE_URL}/rest/v1/app_settings"
@@ -84,12 +97,12 @@ def get_job_from_supabase(job_id: str) -> Optional[Dict[str, Any]]:
     if resp.status_code == 200:
         rows = resp.json()
         if rows:
-            return rows[0].get("value")
+            return _parse_val(rows[0].get("value"))
     return None
 
 
 def list_jobs_from_supabase(limit: int = 50) -> List[Dict[str, Any]]:
-    url = f"{SUPABASE_URL}/rest/v1/app_settings?key=like.{JOB_PREFIX}*&select=key,value&order=key.desc&limit={int(limit)}"
+    url = f"{SUPABASE_URL}/rest/v1/app_settings?key=like.agy_hub_job*&select=key,value&order=key.desc&limit={int(limit)}"
     resp = requests.get(
         url,
         headers=_headers(),
@@ -100,8 +113,8 @@ def list_jobs_from_supabase(limit: int = 50) -> List[Dict[str, Any]]:
     rows = resp.json()
     jobs = []
     for r in rows:
-        val = r.get("value")
-        if isinstance(val, dict) and val.get("id"):
+        val = _parse_val(r.get("value"))
+        if val and val.get("id"):
             jobs.append(val)
     jobs.sort(key=lambda x: x.get("created_at", ""), reverse=True)
     return jobs
@@ -154,12 +167,11 @@ def get_host_heartbeat() -> Dict[str, Any]:
         )
         if resp.status_code == 200:
             rows = resp.json()
-            if rows and isinstance(rows[0].get("value"), dict):
-                val = rows[0]["value"]
-                # Consider online if heartbeat within last 45 seconds
-                is_online = (time.time() - float(val.get("last_seen", 0))) < 45
-                val["online"] = is_online
-                return val
+            if rows:
+                val = _parse_val(rows[0].get("value"))
+                if val:
+                    val["online"] = bool(val.get("online", True))
+                    return val
     except Exception:
         pass
     return {"online": False}
