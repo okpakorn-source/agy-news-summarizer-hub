@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Antigravity News Hub — ระบบสรุปเนื้อข่าว</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Prompt', sans-serif;
+      background-color: #0b1120;
+      color: #f1f5f9;
+    }
+    .news-prose {
+      font-family: 'Sarabun', sans-serif;
+      line-height: 1.9;
+      font-size: 1.05rem;
+    }
+    .line-clamp-1 {
+      display: -webkit-box;
+      -webkit-line-clamp: 1;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #0f172a; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 9999px; }
+    ::-webkit-scrollbar-thumb:hover { background: #475569; }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+  <!-- Clean Top Bar -->
+  <header class="bg-slate-900/90 border-b border-slate-800/80 sticky top-0 z-30 backdrop-blur-md">
+    <div class="max-w-7xl mx-auto px-5 py-3 flex flex-wrap items-center justify-between gap-3">
+      <!-- Brand -->
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-lg">
+          📰
+        </div>
+        <div>
+          <div class="flex items-center gap-2.5">
+            <h1 class="text-base font-bold text-white tracking-tight">News Summarizer Hub</h1>
+            <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+              เครื่องแม่พร้อมทำงาน
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Controls -->
+      <div class="flex flex-wrap items-center gap-2.5">
+        <!-- Compact Status Pills -->
+        <div class="flex items-center gap-2 bg-slate-800/70 border border-slate-700/60 rounded-xl px-3 py-1.5 text-xs">
+          <span class="text-amber-400">กำลังทำ <strong id="stat-processing">0</strong></span>
+          <span class="text-slate-600">•</span>
+          <span class="text-sky-400">รอคิว <strong id="stat-queued">0</strong></span>
+          <span class="text-slate-600">•</span>
+          <span class="text-emerald-400">เสร็จแล้ว <strong id="stat-completed">0</strong></span>
+        </div>
+
+        <!-- Share Link Button -->
+        <button onclick="toggleShareModal()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-3 py-1.5 rounded-xl text-xs font-medium transition flex items-center gap-1.5">
+          <span>🔗 ลิงก์พนักงาน</span>
+        </button>
+
+        <!-- Employee Badge -->
+        <div class="flex items-center gap-1.5 bg-slate-800/90 border border-slate-700 rounded-xl px-3 py-1.5">
+          <span class="text-xs text-slate-400">👤</span>
+          <input id="employee-name" type="text" value="พนักงาน 1" onchange="saveEmployeeName()"
+            class="bg-transparent text-xs font-semibold text-emerald-300 focus:outline-none w-24"
+            title="คลิกเพื่อเปลี่ยนชื่อคุณ" />
+        </div>
+      </div>
+    </div>
+
+    <!-- Collapsible Share Bar -->
+    <div id="share-bar" class="hidden bg-slate-950 border-t border-slate-800 px-5 py-2.5">
+      <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3 text-xs">
+        <div class="flex flex-wrap items-center gap-4">
+          <div class="flex items-center gap-2">
+            <span class="text-slate-400">🌐 ลิงก์ออนไลน์ (มือถือ/นอกออฟฟิศ):</span>
+            <code id="tunnel-url-display" class="bg-slate-900 border border-slate-800 px-2.5 py-1 rounded-lg text-emerald-300 font-mono">กำลังตรวจสอบ...</code>
+            <button onclick="copyTextById('tunnel-url-display')" class="bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-semibold px-2.5 py-1 rounded-lg">คัดลอก</button>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-slate-400">📶 ลิงก์ Wi-Fi ในออฟฟิศ:</span>
+            <code id="lan-url-display" class="bg-slate-900 border border-slate-800 px-2.5 py-1 rounded-lg text-sky-300 font-mono">http://localhost:8080</code>
+            <button onclick="copyTextById('lan-url-display')" class="bg-slate-800 hover:bg-slate-700 text-white px-2.5 py-1 rounded-lg">คัดลอก</button>
+          </div>
+        </div>
+        <button onclick="toggleShareModal()" class="text-slate-400 hover:text-white">✕ ปิด</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="max-w-7xl w-full mx-auto px-5 py-6 grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 items-start">
+
+    <!-- Left Column: Minimalist Input Card (4 cols) -->
+    <section class="lg:col-span-4 lg:sticky lg:top-20">
+      <div class="bg-slate-900/90 border border-slate-800/90 rounded-2xl p-5 shadow-xl">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-sm font-bold text-white">✨ ส่งงานสรุปข่าวใหม่</h2>
+          <button type="button" onclick="clearForm()" class="text-xs text-slate-400 hover:text-white transition">ล้างข้อมูล</button>
+        </div>
+
+        <form id="submit-form" onsubmit="handleSubmit(event)" class="space-y-3.5">
+
+          <!-- 1. Main Link Input -->
+          <div>
+            <label class="block text-xs font-medium text-slate-300 mb-1.5">
+              ลิงก์คลิป หรือ ลิงก์ข่าว <span class="text-slate-500 font-normal">(YouTube, FB, TikTok, IG, เว็บข่าว)</span>
+            </label>
+            <textarea id="urls-input" rows="2"
+              oninput="checkDuplicateUrl(this.value)"
+              placeholder="วางลิงก์คลิปหรือลิงก์ข่าวที่นี่..."
+              class="w-full bg-slate-950/90 border border-slate-800 focus:border-emerald-500/80 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none transition"></textarea>
+
+            <!-- Duplicate Alert -->
+            <div id="dup-alert" class="hidden mt-2 bg-amber-500/10 border border-amber-500/30 rounded-xl p-2.5 text-xs text-amber-200 flex items-center justify-between gap-2">
+              <span>⚠️ มีเพื่อนส่งลิงก์นี้แล้ว (<span id="dup-emp" class="font-semibold"></span>)</span>
+              <button type="button" id="dup-view-btn" class="shrink-0 bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold px-2.5 py-1 rounded-lg">
+                เปิดดู
+              </button>
+            </div>
+          </div>
+
+          <!-- 2. Compact Image Drop / Ctrl+V -->
+          <div>
+            <div id="drop-zone"
+              onclick="document.getElementById('image-input').click()"
+              class="border border-dashed border-slate-700/80 hover:border-emerald-500/60 bg-slate-950/50 rounded-xl p-3 text-center cursor-pointer transition">
+              <input id="image-input" type="file" accept="image/*" multiple class="hidden" onchange="handleFilesSelected(this.files)" />
+              <div class="text-xs text-slate-400">
+                🖼️ <span class="text-emerald-400 font-medium">แนบรูปภาพ</span> หรือกด <kbd class="bg-slate-800 px-1.5 py-0.5 rounded text-[11px] text-slate-200">Ctrl+V</kbd> วางภาพแคปหน้าจอ
+              </div>
+              <div id="image-preview-list" class="flex flex-wrap gap-2 mt-2.5 justify-center empty:hidden"></div>
+            </div>
+          </div>
+
+          <!-- 3. Optional Text / Caption -->
+          <div>
+            <textarea id="raw-text" rows="2"
+              placeholder="วางข้อความโพสต์ หรือเนื้อหาเพิ่มเติม (ถ้ามี)..."
+              class="w-full bg-slate-950/90 border border-slate-800 focus:border-emerald-500/80 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none transition"></textarea>
+          </div>
+
+          <!-- 4. Collapsible Advanced Options (Keeps UI clean!) -->
+          <details class="group bg-slate-950/40 border border-slate-800/80 rounded-xl px-3.5 py-2">
+            <summary class="cursor-pointer text-xs font-medium text-slate-400 group-open:text-slate-200 flex items-center justify-between list-none">
+              <span>⚙️ ตั้งค่าเพิ่มเติม (สั่งเน้นประเด็น / เปลี่ยนโหมด)</span>
+              <span class="text-[10px] transition group-open:rotate-180">▼</span>
+            </summary>
+            <div class="mt-3 pt-2.5 border-t border-slate-800/80 space-y-2.5">
+              <div>
+                <label class="block text-[11px] text-slate-400 mb-1">🎯 สั่งเน้นประเด็นพิเศษ:</label>
+                <input id="focus-instruction" type="text"
+                  placeholder="เช่น เน้นประเด็นคำชี้แจงเรื่องบัญชี..."
+                  class="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500" />
+              </div>
+              <div>
+                <label class="block text-[11px] text-slate-400 mb-1">รูปแบบการสรุป:</label>
+                <select id="output-mode"
+                  class="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-emerald-500">
+                  <option value="standard_4lock" selected>✅ มาตรฐาน (เนื้อข่าวดิบ + เชื่อมโยงบริบท)</option>
+                  <option value="strict_clip_only">🎬 แกะเฉพาะในคลิป/โพสต์ 100% (ไม่ค้นเพิ่ม)</option>
+                  <option value="viral_3_para">🔥 ข่าวไวรัล 3 ย่อหน้าพร้อมโพสต์</option>
+                </select>
+              </div>
+            </div>
+          </details>
+
+          <button id="submit-btn" type="submit"
+            class="w-full py-2.5 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-sm shadow-lg shadow-emerald-500/15 transition flex items-center justify-center gap-2">
+            <span>🚀 สรุปเนื้อข่าว</span>
+          </button>
+        </form>
+      </div>
+    </section>
+
+    <!-- Right Column: Clean Expandable Case List (8 cols) -->
+    <section class="lg:col-span-8 flex flex-col gap-3">
+
+      <!-- Toolbar: Tabs + Search + Expand/Collapse All -->
+      <div class="bg-slate-900/90 border border-slate-800/90 rounded-2xl p-3 flex flex-wrap items-center justify-between gap-2.5">
+        <div class="flex items-center gap-1.5">
+          <button id="tab-all" onclick="setFilterMode('ALL')"
+            class="px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-500 text-slate-950 transition">
+            รายการทั้งหมด (<span id="count-all">0</span>)
+          </button>
+          <button id="tab-mine" onclick="setFilterMode('MINE')"
+            class="px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-800/80 text-slate-300 hover:bg-slate-700 transition">
+            งานของฉัน
+          </button>
+        </div>
+
+        <div class="flex items-center gap-2 flex-1 justify-end">
+          <input id="search-box" type="text" oninput="renderJobs()" placeholder="🔍 ค้นหาหัวข้อข่าว / พนักงาน..."
+            class="w-full max-w-[220px] bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500" />
+          <button onclick="collapseAll()" class="text-xs text-slate-400 hover:text-white bg-slate-800/70 hover:bg-slate-800 px-2.5 py-1.5 rounded-xl border border-slate-700/60 transition" title="ย่อเก็บทุกเคส">
+            ย่อทั้งหมด
+          </button>
+        </div>
+      </div>
+
+      <!-- Accordion Cases List -->
+      <div id="jobs-container" class="space-y-2.5">
+        <div class="text-center py-12 text-slate-500 text-sm">กำลังโหลดรายการข่าว...</div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Image Lightbox Modal -->
+  <div id="img-modal" onclick="closeImageModal()" class="hidden fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="max-w-5xl max-h-[92vh] overflow-auto bg-slate-900 border border-slate-700 rounded-2xl p-3" onclick="event.stopPropagation()">
+      <div class="flex justify-between items-center mb-2 px-2">
+        <span class="text-xs text-slate-300 font-medium">🔍 ภาพเฟรมจากคลิปจริง / รูปต้นฉบับ</span>
+        <button onclick="closeImageModal()" class="text-slate-400 hover:text-white text-xs font-bold px-2 py-1 rounded bg-slate-800">✕ ปิด</button>
+      </div>
+      <img id="modal-img-src" src="" class="max-w-full h-auto rounded-lg" />
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div id="toast" class="hidden fixed bottom-5 right-5 z-50 bg-emerald-500 text-slate-950 font-semibold px-4 py-2.5 rounded-xl shadow-2xl text-xs"></div>
+
+  <script>
+    let selectedFiles = [];
+    let allJobs = [];
+    let filterMode = 'ALL';
+    let dupTimeout = null;
+    // Track which job cards are expanded (collapsed by default for clean UI!)
+    let expandedJobs = new Set();
+    // Track which job cards have "Edit Mode" open
+    let editingJobs = new Set();
+    let firstLoadDone = false;
+
+    const savedEmp = localStorage.getItem('agy_employee_name');
+    if (savedEmp) {
+      document.getElementById('employee-name').value = savedEmp;
+    }
+
+    function saveEmployeeName() {
+      const val = document.getElementById('employee-name').value.trim() || 'พนักงาน 1';
+      localStorage.setItem('agy_employee_name', val);
+      if (filterMode === 'MINE') renderJobs();
+    }
+
+    function showToast(msg) {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.classList.remove('hidden');
+      setTimeout(() => t.classList.add('hidden'), 2400);
+    }
+
+    function toggleShareModal() {
+      document.getElementById('share-bar').classList.toggle('hidden');
+    }
+
+    function copyTextById(id) {
+      const txt = document.getElementById(id).textContent.trim();
+      navigator.clipboard.writeText(txt);
+      showToast('คัดลอกลิงก์เรียบร้อยแล้ว!');
+    }
+
+    function copyRawNewsDirect(jobId, event) {
+      if (event) event.stopPropagation();
+      const job = allJobs.find((x) => x.id === jobId);
+      if (!job || !job.result) return;
+      const ta = document.getElementById(`raw-news-${jobId}`);
+      const textToCopy = ta ? ta.value : (job.result.raw_news || '');
+      navigator.clipboard.writeText(textToCopy);
+      showToast('📋 คัดลอกเนื้อข่าวดิบเรียบร้อยแล้ว!');
+    }
+
+    function toggleExpandJob(jobId) {
+      if (expandedJobs.has(jobId)) {
+        expandedJobs.delete(jobId);
+      } else {
+        expandedJobs.add(jobId);
+      }
+      renderJobs();
+    }
+
+    function collapseAll() {
+      expandedJobs.clear();
+      editingJobs.clear();
+      renderJobs();
+    }
+
+    function toggleEditJob(jobId, event) {
+      if (event) event.stopPropagation();
+      if (editingJobs.has(jobId)) {
+        editingJobs.delete(jobId);
+      } else {
+        editingJobs.add(jobId);
+      }
+      renderJobs();
+    }
+
+    // Paste screenshot via Ctrl+V
+    window.addEventListener('paste', (e) => {
+      const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+      const files = [];
+      for (const item of items) {
+        if (item.kind === 'file' && item.type.startsWith('image/')) {
+          const blob = item.getAsFile();
+          files.push(new File([blob], `pasted_${Date.now()}.png`, { type: blob.type }));
+        }
+      }
+      if (files.length > 0) {
+        handleFilesSelected(files);
+        showToast(`แนบรูปจากคลิปบอร์ด ${files.length} รูปแล้ว`);
+      }
+    });
+
+    function handleFilesSelected(fileList) {
+      for (const f of fileList) selectedFiles.push(f);
+      renderImagePreviews();
+    }
+
+    function removeSelectedImage(idx) {
+      selectedFiles.splice(idx, 1);
+      renderImagePreviews();
+    }
+
+    function renderImagePreviews() {
+      const container = document.getElementById('image-preview-list');
+      container.innerHTML = '';
+      selectedFiles.forEach((file, idx) => {
+        const url = URL.createObjectURL(file);
+        const div = document.createElement('div');
+        div.className = 'relative w-14 h-14 rounded-lg overflow-hidden border border-slate-700';
+        div.innerHTML = `
+          <img src="${url}" class="w-full h-full object-cover" />
+          <button type="button" onclick="event.stopPropagation(); removeSelectedImage(${idx})"
+            class="absolute top-0.5 right-0.5 bg-black/80 text-white rounded-full w-4 h-4 text-[10px] flex items-center justify-center hover:bg-red-600">✕</button>
+        `;
+        container.appendChild(div);
+      });
+    }
+
+    function clearForm() {
+      document.getElementById('urls-input').value = '';
+      document.getElementById('raw-text').value = '';
+      document.getElementById('focus-instruction').value = '';
+      document.getElementById('dup-alert').classList.add('hidden');
+      selectedFiles = [];
+      renderImagePreviews();
+    }
+
+    function checkDuplicateUrl(val) {
+      clearTimeout(dupTimeout);
+      const alertBox = document.getElementById('dup-alert');
+      const m = val.match(/https?:\/\/[^\s"']+/);
+      if (!m) {
+        alertBox.classList.add('hidden');
+        return;
+      }
+      dupTimeout = setTimeout(async () => {
+        try {
+          const res = await fetch(`/api/check-duplicate?url=${encodeURIComponent(m[0])}`);
+          const data = await res.json();
+          if (data.duplicate) {
+            document.getElementById('dup-emp').textContent = data.employee_name;
+            document.getElementById('dup-view-btn').onclick = () => {
+              expandedJobs.add(data.job_id);
+              renderJobs();
+              const card = document.getElementById(`job-card-${data.job_id}`);
+              if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            };
+            alertBox.classList.remove('hidden');
+          } else {
+            alertBox.classList.add('hidden');
+          }
+        } catch (err) {}
+      }, 350);
+    }
+
+    async function handleSubmit(e) {
+      e.preventDefault();
+      const empName = document.getElementById('employee-name').value.trim() || 'พนักงาน';
+      const urlsInput = document.getElementById('urls-input').value.trim();
+      const rawText = document.getElementById('raw-text').value.trim();
+      const focusInstruction = document.getElementById('focus-instruction').value.trim();
+      const outputMode = document.getElementById('output-mode').value;
+
+      if (!urlsInput && !rawText && selectedFiles.length === 0) {
+        showToast('⚠️ กรุณาวางลิงก์, ข้อความ หรือแนบรูปภาพอย่างน้อย 1 อย่าง');
+        return;
+      }
+
+      const btn = document.getElementById('submit-btn');
+      btn.disabled = true;
+      btn.innerHTML = '<span>⏳ กำลังส่งเข้าคิว...</span>';
+
+      try {
+        const fd = new FormData();
+        fd.append('employee_name', empName);
+        fd.append('urls_input', urlsInput);
+        fd.append('raw_text', rawText);
+        fd.append('focus_instruction', focusInstruction);
+        fd.append('output_mode', outputMode);
+        selectedFiles.forEach((f) => fd.append('images', f));
+
+        const res = await fetch('/api/submit', { method: 'POST', body: fd });
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.detail || 'เกิดข้อผิดพลาด');
+        }
+        const out = await res.json();
+        if (out.job_id) {
+          expandedJobs.add(out.job_id);
+        }
+        clearForm();
+        showToast('🚀 ส่งงานเข้าคิวเรียบร้อย!');
+        await fetchJobs();
+      } catch (err) {
+        showToast('❌ ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<span>🚀 สรุปเนื้อข่าว</span>';
+      }
+    }
+
+    function setFilterMode(mode) {
+      filterMode = mode;
+      document.getElementById('tab-all').className = mode === 'ALL'
+        ? 'px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-500 text-slate-950 transition'
+        : 'px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-800/80 text-slate-300 hover:bg-slate-700 transition';
+      document.getElementById('tab-mine').className = mode === 'MINE'
+        ? 'px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-500 text-slate-950 transition'
+        : 'px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-800/80 text-slate-300 hover:bg-slate-700 transition';
+      renderJobs();
+    }
+
+    async function saveEditedNews(jobId) {
+      const textarea = document.getElementById(`raw-news-${jobId}`);
+      if (!textarea) return;
+      try {
+        await fetch(`/api/jobs/${jobId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ raw_news: textarea.value }),
+        });
+        editingJobs.delete(jobId);
+        showToast('💾 บันทึกเนื้อข่าวเรียบร้อย!');
+        await fetchJobs();
+      } catch (e) {
+        showToast('❌ บันทึกไม่สำเร็จ');
+      }
+    }
+
+    async function deleteJob(jobId, event) {
+      if (event) event.stopPropagation();
+      if (!confirm('ต้องการลบเคสข่าวนี้ใช่หรือไม่?')) return;
+      await fetch(`/api/jobs/${jobId}`, { method: 'DELETE' });
+      expandedJobs.delete(jobId);
+      await fetchJobs();
+      showToast('ลบรายการเรียบร้อย');
+    }
+
+    function openImageModal(src, event) {
+      if (event) event.stopPropagation();
+      document.getElementById('modal-img-src').src = src;
+      document.getElementById('img-modal').classList.remove('hidden');
+    }
+
+    function closeImageModal() {
+      document.getElementById('img-modal').classList.add('hidden');
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    function formatShortTime(dtStr) {
+      if (!dtStr) return '';
+      // e.g. 2026-10-28 12:40:00 -> 12:40 น.
+      const parts = dtStr.split(' ');
+      if (parts.length > 1) {
+        return parts[1].slice(0, 5) + ' น.';
+      }
+      return dtStr;
+    }
+
+    function renderJobs() {
+      const container = document.getElementById('jobs-container');
+      document.getElementById('count-all').textContent = allJobs.length;
+
+      // Don't re-render while user is actively typing in an edit textarea
+      const activeId = document.activeElement ? document.activeElement.id : null;
+      if (activeId && activeId.startsWith('raw-news-')) return;
+
+      const myName = (document.getElementById('employee-name').value || '').trim().toLowerCase();
+      const q = (document.getElementById('search-box').value || '').trim().toLowerCase();
+
+      const filtered = allJobs.filter((j) => {
+        if (filterMode === 'MINE' && (j.employee_name || '').toLowerCase() !== myName) return false;
+        if (q) {
+          const hay = [
+            j.employee_name,
+            j.raw_text,
+            j.focus_instruction,
+            ...(j.urls || []),
+            j.result?.headline,
+            j.result?.raw_news,
+          ].join(' ').toLowerCase();
+          if (!hay.includes(q)) return false;
+        }
+        return true;
+      });
+
+      if (filtered.length === 0) {
+        container.innerHTML = `
+          <div class="bg-slate-900/50 border border-slate-800/80 rounded-2xl p-10 text-center text-slate-500 text-xs">
+            ไม่มีรายการข่าวในหมวดนี้
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = filtered.map((j) => {
+        const isDone = j.status === 'completed';
+        const isFailed = j.status === 'failed';
+        const isExpanded = expandedJobs.has(j.id);
+        const isEditing = editingJobs.has(j.id);
+        const res = j.result || {};
+        const shortTime = formatShortTime(j.created_at);
+
+        // 1. Active Processing Card (Always shows progress cleanly)
+        if (!isDone && !isFailed) {
+          return `
+            <div id="job-card-${j.id}" class="bg-slate-900 border border-amber-500/40 rounded-2xl px-4 py-3.5 shadow-md">
+              <div class="flex items-center justify-between gap-2 mb-2">
+                <div class="flex items-center gap-2">
+                  <span class="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
+                  <span class="text-xs font-semibold text-amber-300">${escapeHtml(j.progress_text || 'กำลังประมวลผล...')} (${j.progress_pct || 10}%)</span>
+                </div>
+                <div class="flex items-center gap-2 text-xs text-slate-400">
+                  <span class="text-emerald-300 font-medium">👤 ${escapeHtml(j.employee_name)}</span>
+                  <span>• ${escapeHtml(shortTime)}</span>
+                </div>
+              </div>
+              <div class="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                <div class="bg-gradient-to-r from-amber-400 to-emerald-400 h-full transition-all duration-500" style="width: ${j.progress_pct || 10}%"></div>
+              </div>
+            </div>
+          `;
+        }
+
+        const headline = res.headline || 'สรุปเนื้อข่าว';
+        const rawNews = res.raw_news || '';
+        const previewSnippet = rawNews.replace(/\s+/g, ' ').slice(0, 110);
+
+        // 2. Compact Collapsed Row (Default state — clean & scannable!)
+        if (!isExpanded) {
+          return `
+            <div id="job-card-${j.id}" onclick="toggleExpandJob('${j.id}')"
+              class="group bg-slate-900/85 hover:bg-slate-800/80 border border-slate-800/90 hover:border-slate-700 rounded-2xl px-4 py-3.5 cursor-pointer transition flex items-center justify-between gap-3">
+              <div class="min-w-0 flex-1">
+                <div class="flex items-center gap-2 mb-0.5">
+                  <span class="text-emerald-400 text-xs">●</span>
+                  <h3 class="text-sm font-semibold text-slate-100 group-hover:text-white truncate">${escapeHtml(headline)}</h3>
+                </div>
+                <p class="text-xs text-slate-400 truncate pl-4">${escapeHtml(previewSnippet)}...</p>
+              </div>
+
+              <div class="flex items-center gap-2 shrink-0">
+                <span class="hidden sm:inline-block px-2 py-0.5 rounded-lg text-[11px] bg-slate-800 text-slate-300 border border-slate-700/70">
+                  👤 ${escapeHtml(j.employee_name)}
+                </span>
+                <span class="hidden md:inline-block text-[11px] text-slate-500 w-14 text-right">${escapeHtml(shortTime)}</span>
+                <button onclick="copyRawNewsDirect('${j.id}', event)"
+                  class="bg-emerald-500/15 hover:bg-emerald-500 text-emerald-300 hover:text-slate-950 border border-emerald-500/30 font-semibold px-2.5 py-1 rounded-xl text-xs transition"
+                  title="คัดลอกเนื้อข่าวทันที">
+                  📋 คัดลอก
+                </button>
+                <span class="text-slate-400 group-hover:text-white text-xs px-1.5 py-1 rounded-lg bg-slate-800/60">
+                  ▼ ดูเนื้อหา
+                </span>
+              </div>
+            </div>
+          `;
+        }
+
+        // 3. Expanded Detail Card (Shown when clicked!)
+        const urlsHtml = (j.urls || []).map((u) =>
+          `<a href="${escapeHtml(u)}" target="_blank" class="text-sky-400 hover:underline truncate block text-xs">🔗 ${escapeHtml(u)}</a>`
+        ).join('');
+
+        const sheets = res.contact_sheets || [];
+        const upImgs = res.uploaded_images || [];
+        const allMedia = [...upImgs, ...sheets];
+
+        return `
+          <div id="job-card-${j.id}" class="bg-slate-900 border border-emerald-500/40 rounded-2xl overflow-hidden shadow-2xl">
+            <!-- Expanded Top Header (Click to collapse) -->
+            <div onclick="toggleExpandJob('${j.id}')"
+              class="bg-slate-800/60 hover:bg-slate-800 px-5 py-3.5 cursor-pointer flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 transition">
+              <div class="flex items-center gap-2.5 min-w-0 flex-1">
+                <span class="text-emerald-400 text-xs">▼</span>
+                <h3 class="text-sm sm:text-base font-bold text-white leading-snug">${escapeHtml(headline)}</h3>
+              </div>
+              <div class="flex items-center gap-2 shrink-0" onclick="event.stopPropagation()">
+                <span class="px-2 py-0.5 rounded-lg text-[11px] bg-slate-900 text-emerald-300 border border-slate-700">
+                  👤 ${escapeHtml(j.employee_name)} • ${escapeHtml(shortTime)}
+                </span>
+                <button onclick="copyRawNewsDirect('${j.id}', event)"
+                  class="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-3 py-1 rounded-xl text-xs shadow transition">
+                  📋 คัดลอกเนื้อข่าว
+                </button>
+                <button onclick="toggleEditJob('${j.id}', event)"
+                  class="bg-slate-900 hover:bg-slate-700 text-slate-300 px-2.5 py-1 rounded-xl text-xs border border-slate-700 transition">
+                  ${isEditing ? 'ยกเลิกแก้ไข' : '✏️ แก้ไข'}
+                </button>
+                <button onclick="deleteJob('${j.id}', event)"
+                  class="bg-slate-900 hover:bg-red-950 text-slate-400 hover:text-red-300 px-2 py-1 rounded-xl text-xs border border-slate-700 transition" title="ลบเคสนี้">
+                  🗑️
+                </button>
+                <button onclick="toggleExpandJob('${j.id}')" class="text-slate-400 hover:text-white text-xs px-2 py-1">
+                  ▲ ย่อเก็บ
+                </button>
+              </div>
+            </div>
+
+            <!-- Expanded Body -->
+            <div class="p-5 space-y-3.5">
+              ${urlsHtml ? `<div class="bg-slate-950/60 px-3 py-2 rounded-xl border border-slate-800/80">${urlsHtml}</div>` : ''}
+
+              <!-- Clean Reader View vs Edit Mode -->
+              ${isEditing ? `
+                <div class="space-y-2">
+                  <textarea id="raw-news-${j.id}" rows="9"
+                    class="w-full bg-slate-950 border border-emerald-500/60 rounded-xl p-4 text-slate-100 news-prose focus:outline-none">${escapeHtml(rawNews)}</textarea>
+                  <div class="flex justify-end">
+                    <button onclick="saveEditedNews('${j.id}')"
+                      class="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-4 py-1.5 rounded-xl text-xs">
+                      💾 บันทึกการแก้ไข
+                    </button>
+                  </div>
+                </div>
+              ` : `
+                <div class="bg-slate-950/80 border border-slate-800/90 rounded-xl p-4 text-slate-100 news-prose whitespace-pre-line select-all">${escapeHtml(rawNews)}</div>
+              `}
+
+              <!-- Compact Footer: Audit Badge + Collapsible Breakdown & Frames -->
+              <div class="flex flex-wrap items-center justify-between gap-2 pt-1">
+                <div class="text-xs text-emerald-400/90 font-medium">
+                  ${escapeHtml(res.audit_tag || '✅ ตรวจสอบแล้ว')}
+                </div>
+              </div>
+
+              <!-- Optional Deep-Dive Accordion (Frames & Breakdown) -->
+              <details class="bg-slate-950/40 border border-slate-800/80 rounded-xl px-3.5 py-2 text-xs">
+                <summary class="cursor-pointer font-medium text-slate-400 hover:text-slate-200">
+                  🔍 ดูข้อมูลการแกะภาพ-เสียง & เฟรมภาพจากคลิปจริง (${allMedia.length} ภาพ)
+                </summary>
+                <div class="mt-3 pt-3 border-t border-slate-800/80 space-y-3 text-slate-300">
+                  <div>
+                    <strong class="text-amber-300">🎬 สิ่งที่เห็นและได้ยินจากคลิป/ภาพจริง:</strong>
+                    <p class="mt-0.5 whitespace-pre-line text-slate-300">${escapeHtml(res.visual_audio_breakdown || '-')}</p>
+                  </div>
+                  <div>
+                    <strong class="text-sky-300">🌐 บริบทที่ค้นเชื่อมโยง:</strong>
+                    <p class="mt-0.5 whitespace-pre-line text-slate-300">${escapeHtml(res.context_connected || '-')}</p>
+                  </div>
+                  ${allMedia.length > 0 ? `
+                    <div>
+                      <strong class="text-emerald-300 block mb-1.5">🖼️ ภาพต้นฉบับ / เฟรมทุกวินาทีจากคลิป (คลิกเพื่อขยาย):</strong>
+                      <div class="flex flex-wrap gap-2">
+                        ${allMedia.map((m) => `
+                          <img src="${m}" onclick="openImageModal('${m}', event)"
+                            class="h-20 w-auto rounded-lg border border-slate-700 hover:border-emerald-400 cursor-pointer object-cover transition" />
+                        `).join('')}
+                      </div>
+                    </div>
+                  ` : ''}
+                </div>
+              </details>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    async function fetchSystemInfo() {
+      try {
+        const res = await fetch('/api/system-info');
+        const data = await res.json();
+        document.getElementById('lan-url-display').textContent = data.lan_url;
+        document.getElementById('tunnel-url-display').textContent = data.tunnel_url || 'ยังไม่ได้เปิด Tunnel';
+        document.getElementById('stat-processing').textContent = data.stats.processing;
+        document.getElementById('stat-queued').textContent = data.stats.queued;
+        document.getElementById('stat-completed').textContent = data.stats.completed;
+      } catch (e) {}
+    }
+
+    async function fetchJobs() {
+      try {
+        const res = await fetch('/api/jobs');
+        const data = await res.json();
+        allJobs = data.jobs || [];
+        renderJobs();
+      } catch (e) {}
+    }
+
+    fetchSystemInfo();
+    fetchJobs();
+    setInterval(() => {
+      fetchSystemInfo();
+      fetchJobs();
+    }, 3000);
+  </script>
+</body>
+</html>

@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+jobs_data/
+jobs.db
+tunnel_url.txt
+.vercel/
+.env
