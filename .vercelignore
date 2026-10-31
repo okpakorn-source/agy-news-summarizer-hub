@@ -9,3 +9,9 @@ __pycache__/
 api/
 sync_seed_to_supabase.py
 seed_db.py
+add_*.py
+save_*.py
+scrape_*.py
+check_*.py
+populate_*.py
+update_*.py
