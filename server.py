@@ -63,11 +63,41 @@ def extract_urls_from_text(text: str) -> List[str]:
     seen = set()
     out = []
     for u in found:
-        u = u.rstrip(".,;!)")
+        u = u.rstrip(".,;!)'\"]>")
         if u not in seen:
             seen.add(u)
             out.append(u)
     return out
+
+
+def parse_chat_style_submission(
+    urls_input: str,
+    raw_text: str,
+    focus_instruction: str,
+    output_mode: str,
+):
+    """Allow pasting 'ทำข่าวนี้มุมปกติ 1 ข่าว บิดประเด็น 1 ข่าว ขอแนว... https://...' in one box."""
+    urls = extract_urls_from_text(urls_input)
+    leftover = re.sub(r"https?://[^\s<>\"')\]+]+", " ", urls_input or "").strip()
+    leftover = re.sub(r"\s+", " ", leftover).strip(" \t\r\n,-—:")
+
+    if not urls and raw_text:
+        urls = extract_urls_from_text(raw_text)
+
+    merged_focus = (focus_instruction or "").strip()
+    if len(leftover) >= 3:
+        merged_focus = f"{merged_focus}\n{leftover}".strip() if merged_focus else leftover
+
+    # Smart auto-detect mode if employee wrote explicit multi-angle instructions in chat style
+    low_focus = merged_focus.lower()
+    if "3 ย่อหน้า" in low_focus or "สามย่อหน้า" in low_focus:
+        output_mode = "viral_3_para"
+    elif ("บิดประเด็น 2" in low_focus or "บิด 2" in low_focus or "บิดประเด็น2" in low_focus) and "ปกติ" in low_focus:
+        output_mode = "normal_1_spin_2"
+    elif "ปกติ" in low_focus and "บิด" in low_focus and output_mode == "standard_4lock":
+        output_mode = "normal_1_spin_1"
+
+    return urls, merged_focus, output_mode
 
 
 def get_db():
@@ -298,9 +328,9 @@ async def supabase_cloud_poller():
                             json.dumps(cj.get("urls", []), ensure_ascii=False),
                             cj.get("raw_text", ""),
                             cj.get("focus_instruction", ""),
-                            cj.get("output_mode", "standard_4lock"),
-                            "processing",
-                            "เครื่องแม่รับงานจาก Cloud แล้ว กำลังเริ่มประมวลผล...",
+                            cj.get("output_mode", "normal_1_spin_1"),
+                            "queued",
+                            "เครื่องแม่รับงานเข้าคิวแล้ว รอสล็อตประมวลผล...",
                             10,
                             None,
                             cj.get("created_at") or now_th().strftime("%Y-%m-%d %H:%M:%S"),
@@ -317,7 +347,7 @@ async def supabase_cloud_poller():
                             urls=cj.get("urls", []),
                             raw_text=cj.get("raw_text", ""),
                             focus_instruction=cj.get("focus_instruction", ""),
-                            output_mode=cj.get("output_mode", "standard_4lock"),
+                            output_mode=cj.get("output_mode", "normal_1_spin_1"),
                             image_files=saved_images,
                         )
                     )
@@ -351,7 +381,8 @@ async def system_info():
             "lan_url": hb.get("lan_url") or "http://localhost:8080",
             "local_url": "http://localhost:8080",
             "tunnel_url": VERCEL_PUBLIC_URL,
-            "host_online": hb.get("online", True),
+            "host_online": bool(hb.get("online", False)),
+            "host_last_seen": hb.get("last_seen_str", ""),
             "stats": counts,
         }
 
@@ -425,12 +456,12 @@ async def submit_job(
     urls_input: str = Form(""),
     raw_text: str = Form(""),
     focus_instruction: str = Form(""),
-    output_mode: str = Form("standard_4lock"),
+    output_mode: str = Form("normal_1_spin_1"),
     images: List[UploadFile] = File(default=[]),
 ):
-    urls = extract_urls_from_text(urls_input)
-    if not urls and raw_text:
-        urls = extract_urls_from_text(raw_text)
+    urls, focus_instruction, output_mode = parse_chat_style_submission(
+        urls_input, raw_text, focus_instruction, output_mode
+    )
 
     valid_images = [img for img in images if img and img.filename]
     if not urls and not raw_text.strip() and not valid_images:
@@ -577,8 +608,19 @@ async def get_job(job_id: str):
 
 
 class UpdateJobBody(BaseModel):
-    raw_news: str
+    raw_news: Optional[str] = None
     headline: Optional[str] = None
+    articles: Optional[List[dict]] = None
+
+
+def _rebuild_raw_news_from_articles(articles: List[dict]) -> str:
+    cleaned = [a for a in articles if isinstance(a, dict) and str(a.get("content", "")).strip()]
+    if len(cleaned) == 1:
+        return str(cleaned[0]["content"]).strip()
+    return "\n\n══════════════════════════════\n\n".join(
+        f"【{a.get('title') or a.get('label') or f'ข่าวที่ {i+1}'}】\n\n{str(a['content']).strip()}"
+        for i, a in enumerate(cleaned)
+    )
 
 
 @app.put("/api/jobs/{job_id}")
@@ -588,7 +630,11 @@ async def update_job_text(job_id: str, body: UpdateJobBody):
         if not j:
             raise HTTPException(status_code=404, detail="ไม่พบงานนี้")
         res = j.get("result") or {}
-        res["raw_news"] = body.raw_news
+        if body.articles is not None:
+            res["articles"] = body.articles
+            res["raw_news"] = _rebuild_raw_news_from_articles(body.articles)
+        elif body.raw_news is not None:
+            res["raw_news"] = body.raw_news
         if body.headline:
             res["headline"] = body.headline
         j["result"] = res
@@ -601,7 +647,11 @@ async def update_job_text(job_id: str, body: UpdateJobBody):
         conn.close()
         raise HTTPException(status_code=404, detail="ไม่พบงานนี้")
     res = json.loads(r["result_json"]) if r["result_json"] else {}
-    res["raw_news"] = body.raw_news
+    if body.articles is not None:
+        res["articles"] = body.articles
+        res["raw_news"] = _rebuild_raw_news_from_articles(body.articles)
+    elif body.raw_news is not None:
+        res["raw_news"] = body.raw_news
     if body.headline:
         res["headline"] = body.headline
     conn.execute("UPDATE jobs SET result_json = ? WHERE id = ?", (json.dumps(res, ensure_ascii=False), job_id))
@@ -609,6 +659,45 @@ async def update_job_text(job_id: str, body: UpdateJobBody):
     conn.close()
     await asyncio.to_thread(sync_row_to_supabase, job_id)
     return {"ok": True}
+
+
+@app.post("/api/jobs/{job_id}/retry")
+async def retry_job(job_id: str):
+    j = await asyncio.to_thread(get_job_from_supabase, job_id)
+    if not IS_VERCEL and not j:
+        conn = get_db()
+        r = conn.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
+        conn.close()
+        if r:
+            item = dict(r)
+            j = {
+                "id": item["id"],
+                "employee_name": item["employee_name"],
+                "urls": json.loads(item["urls_json"] or "[]"),
+                "raw_text": item["raw_text"],
+                "focus_instruction": item["focus_instruction"],
+                "output_mode": item["output_mode"] or "normal_1_spin_1",
+                "created_at": item["created_at"],
+            }
+    if not j:
+        raise HTTPException(status_code=404, detail="ไม่พบงานนี้")
+
+    j["status"] = "queued"
+    j["progress_text"] = "ส่งเข้าคิวรันใหม่อีกครั้ง รอเครื่องแม่ดึงไปประมวลผล..."
+    j["progress_pct"] = 8
+    await asyncio.to_thread(save_job_to_supabase, j)
+
+    if not IS_VERCEL:
+        ACTIVE_LOCAL_JOBS.discard(job_id)
+        conn = get_db()
+        conn.execute(
+            "UPDATE jobs SET status=?, progress_text=?, progress_pct=? WHERE id=?",
+            ("queued", j["progress_text"], 8, job_id),
+        )
+        conn.commit()
+        conn.close()
+
+    return {"ok": True, "job_id": job_id}
 
 
 @app.delete("/api/jobs/{job_id}")

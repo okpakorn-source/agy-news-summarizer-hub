@@ -132,14 +132,19 @@ def delete_job_from_supabase(job_id: str) -> bool:
     return resp.status_code in (200, 204)
 
 
+TH_TZ = datetime.timezone(datetime.timedelta(hours=7))
+
+
 def update_host_heartbeat(lan_url: str = "", tunnel_url: str = ""):
     url = f"{SUPABASE_URL}/rest/v1/app_settings"
+    now_epoch = time.time()
     payload = {
         "key": HOST_STATUS_KEY,
         "value": {
             "online": True,
-            "last_seen": time.time(),
-            "last_seen_str": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "last_seen": now_epoch,
+            "last_seen_epoch": now_epoch,
+            "last_seen_str": datetime.datetime.now(TH_TZ).strftime("%Y-%m-%d %H:%M:%S"),
             "lan_url": lan_url,
             "tunnel_url": tunnel_url,
         },
@@ -170,7 +175,9 @@ def get_host_heartbeat() -> Dict[str, Any]:
             if rows:
                 val = _parse_val(rows[0].get("value"))
                 if val:
-                    val["online"] = bool(val.get("online", True))
+                    last_ts = float(val.get("last_seen_epoch") or val.get("last_seen") or 0)
+                    is_fresh = (time.time() - last_ts) < 45 if last_ts > 0 else False
+                    val["online"] = bool(val.get("online", False)) and is_fresh
                     return val
     except Exception:
         pass

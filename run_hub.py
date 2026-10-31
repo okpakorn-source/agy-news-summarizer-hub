@@ -1,61 +1,36 @@
-import os
-import re
-import time
-import shutil
-import threading
-import subprocess
-from pathlib import Path
+import sys
+import socket
 import uvicorn
 
-BASE_DIR = Path(__file__).parent.resolve()
-TUNNEL_FILE = BASE_DIR / "tunnel_url.txt"
-
-CLOUDFLARED_PATHS = [
-    r"C:\Program Files (x86)\cloudflared\cloudflared.exe",
-    r"C:\Program Files\cloudflared\cloudflared.exe",
-    shutil.which("cloudflared") or "",
-]
+VERCEL_PUBLIC_URL = "https://agy-news-summarizer-hub.vercel.app"
 
 
-def start_cloudflare_tunnel(port: int = 8080):
-    cf_bin = None
-    for p in CLOUDFLARED_PATHS:
-        if p and os.path.exists(p):
-            cf_bin = p
-            break
-    if not cf_bin:
-        print("[Tunnel] cloudflared not found; running on LAN/localhost only.")
-        return
-
+def get_lan_ip() -> str:
     try:
-        proc = subprocess.Popen(
-            [cf_bin, "tunnel", "--url", f"http://localhost:{port}"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-        )
-        for line in proc.stdout:
-            m = re.search(r"https://[a-zA-Z0-9-]+\.trycloudflare\.com", line)
-            if m:
-                url = m.group(0)
-                TUNNEL_FILE.write_text(url, encoding="utf-8")
-                print(f"\n=======================================================")
-                print(f"🌐 ลิงก์ออนไลน์สำหรับส่งให้พนักงาน 10 คน: {url}")
-                print(f"=======================================================\n")
-    except Exception as e:
-        print(f"[Tunnel Error] {e}")
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except Exception:
+        return "127.0.0.1"
 
 
 if __name__ == "__main__":
-    if TUNNEL_FILE.exists():
-        try:
-            TUNNEL_FILE.unlink()
-        except Exception:
-            pass
+    lan_ip = get_lan_ip()
+    print("\n" + "=" * 68)
+    print("  🚀 Antigravity News Summarizer Hub — เครื่องแม่พร้อมรับงานจากพนักงาน!")
+    print("=" * 68)
+    print(f"  🌐 ลิงก์เว็บถาวรส่งให้พนักงาน : {VERCEL_PUBLIC_URL}")
+    print(f"  📶 ลิงก์ Wi-Fi ในออฟฟิศ     : http://{lan_ip}:8080")
+    print(f"  💻 หน้าจอควบคุมบนเครื่องนี้   : http://localhost:8080")
+    print("-" * 68)
+    print("  ✅ ระบบกำลังดึงงานจากเว็บพนักงานมารันในคอมเครื่องนี้อัตโนมัติทุก 3 วินาที")
+    print("  (เปิดหน้าต่างนี้ทิ้งไว้ได้เลย หากต้องการปิดระบบให้กด Ctrl+C หรือปิดหน้าต่าง)")
+    print("=" * 68 + "\n", flush=True)
 
-    t = threading.Thread(target=start_cloudflare_tunnel, args=(8080,), daemon=True)
-    t.start()
+    port = 8080
+    if len(sys.argv) > 1 and sys.argv[1].isdigit():
+        port = int(sys.argv[1])
 
-    uvicorn.run("server:app", host="0.0.0.0", port=8080, reload=False)
+    uvicorn.run("server:app", host="0.0.0.0", port=port, reload=False)

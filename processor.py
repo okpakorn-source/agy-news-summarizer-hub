@@ -31,11 +31,11 @@ VIDEO_DOMAINS = (
 def extract_urls_from_text(text: str) -> List[str]:
     if not text:
         return []
-    pattern = r"https?://[^\s<>\"']+"
+    pattern = r"https?://[^\s<>\"')\]+]+"
     urls = re.findall(pattern, text)
     cleaned = []
     for u in urls:
-        u = u.rstrip(".,;!) individual")
+        u = u.rstrip(".,;!)'\"]>")
         if u not in cleaned:
             cleaned.append(u)
     return cleaned
@@ -154,7 +154,16 @@ def scrape_webpage_text(url: str, job_dir: Optional[Path] = None, image_files: O
         # For Facebook posts (/posts/pfbid..., /share/p/...), fetch full untruncated text via Facebook's post embed plugin
         if is_fb and len(body_text) < 200:
             try:
-                clean_fb_url = re.sub(r"[?&](rdid|share_url|utm_[^=&]+|_rdr)=[^&]*", "", resp.url).rstrip("?&/#")
+                target_fb_url = resp.url
+                og_url_meta = soup.find("meta", property="og:url")
+                if og_url_meta and og_url_meta.get("content"):
+                    target_fb_url = og_url_meta["content"].strip()
+                # Normalize Facebook post URL with long slug (/page/posts/slug/12345/) into (/page/posts/12345)
+                m_post = re.search(r"facebook\.com/([^/?#]+)/posts/(?:[^/?#]+/)?(\d+|pfbid[A-Za-z0-9]+)", target_fb_url)
+                if m_post:
+                    clean_fb_url = f"https://www.facebook.com/{m_post.group(1)}/posts/{m_post.group(2)}"
+                else:
+                    clean_fb_url = re.sub(r"[?&](rdid|share_url|utm_[^=&]+|_rdr)=[^&]*", "", target_fb_url).rstrip("?&/#")
                 embed_url = (
                     f"https://www.facebook.com/plugins/post.php?href="
                     f"{urllib.parse.quote(clean_fb_url, safe='')}&show_text=true&width=500"
@@ -173,10 +182,31 @@ def scrape_webpage_text(url: str, job_dir: Optional[Path] = None, image_files: O
                         txt = div.get_text().strip()
                         if txt and txt not in fb_blocks:
                             fb_blocks.append(txt)
+                    if not fb_blocks:
+                        for p in esoup.find_all("p"):
+                            pt = p.get_text(" ", strip=True)
+                            if pt and pt not in fb_blocks:
+                                fb_blocks.append(pt)
                     if fb_blocks:
                         body_text = "\n\n".join(fb_blocks)
             except Exception:
                 pass
+
+        # If Facebook post links out to an external news article in og:description or body_text, follow the article URL
+        if is_fb and len(body_text) < 350:
+            search_blob = f"{og_desc}\n{body_text}"
+            ext_urls = [
+                u.rstrip(".,;!)")
+                for u in re.findall(r"https?://[^\s<>\"']+", search_blob)
+                if not any(d in u.lower() for d in ("facebook.com", "fb.com", "fb.watch"))
+            ]
+            if ext_urls:
+                try:
+                    art_sub = scrape_webpage_text(ext_urls[0], None, None)
+                    if art_sub.get("body_text"):
+                        body_text = art_sub["body_text"]
+                except Exception:
+                    pass
 
         return {
             "url": url,
@@ -186,6 +216,68 @@ def scrape_webpage_text(url: str, job_dir: Optional[Path] = None, image_files: O
         }
     except Exception as e:
         return {"url": url, "error": str(e)}
+
+
+def _clean_article_box_text(text: str) -> str:
+    if not text:
+        return ""
+    t = str(text).strip()
+    t = re.sub(r"^```[a-zA-Z]*\s*\n?", "", t)
+    t = re.sub(r"\n?```\s*$", "", t)
+    return t.strip()
+
+
+def _normalize_result_articles(result_data: Dict[str, Any], output_mode: str) -> Dict[str, Any]:
+    raw_articles = result_data.get("articles")
+    normalized: List[Dict[str, str]] = []
+
+    if isinstance(raw_articles, list):
+        for idx, item in enumerate(raw_articles):
+            if isinstance(item, dict):
+                content = _clean_article_box_text(item.get("content") or item.get("raw_news") or item.get("text") or "")
+                if not content:
+                    continue
+                label = str(item.get("label") or item.get("mode_badge") or "").strip()
+                title = str(item.get("title") or "").strip()
+                if not label:
+                    if "บิด" in title or (idx > 0 and output_mode in ("normal_1_spin_1", "normal_1_spin_2")) or output_mode == "spin_only_1":
+                        label = "บิดประเด็น"
+                    elif output_mode == "viral_3_para":
+                        label = "ข่าวสั้น 3 ย่อหน้า"
+                    elif output_mode == "strict_clip_only":
+                        label = "เฉพาะในคลิป 100%"
+                    else:
+                        label = "มุมปกติ"
+                if not title:
+                    title = f"{idx + 1}. {label}"
+                normalized.append({"label": label, "title": title, "content": content})
+
+    cleaned_raw = _clean_article_box_text(result_data.get("raw_news") or "")
+
+    if not normalized and cleaned_raw:
+        default_label = (
+            "บิดประเด็น" if output_mode == "spin_only_1"
+            else "ข่าวสั้น 3 ย่อหน้า" if output_mode == "viral_3_para"
+            else "เฉพาะในคลิป 100%" if output_mode == "strict_clip_only"
+            else "มุมปกติ"
+        )
+        normalized.append({
+            "label": default_label,
+            "title": result_data.get("headline") or f"1. ข่าวแบบ{default_label}",
+            "content": cleaned_raw,
+        })
+
+    result_data["articles"] = normalized
+    if len(normalized) == 1:
+        result_data["raw_news"] = normalized[0]["content"]
+    elif len(normalized) > 1:
+        result_data["raw_news"] = "\n\n══════════════════════════════\n\n".join(
+            f"【{a['title']}】\n\n{a['content']}" for a in normalized
+        )
+    else:
+        result_data["raw_news"] = cleaned_raw
+
+    return result_data
 
 
 async def run_subprocess(cmd: List[str], cwd: Path, timeout: int = 180) -> subprocess.CompletedProcess:
@@ -350,10 +442,31 @@ async def process_job(
     with open(context_file, "w", encoding="utf-8") as f:
         json.dump(extracted_meta, f, ensure_ascii=False, indent=2)
 
-    progress_cb("AI กำลังดูภาพ-ฟังเสียงจริง และตรวจสอบข้อเท็จจริง 4 ชั้น (Antigravity)...", 65)
+    progress_cb("AI กำลังอ่านภาพ-เสียง ค้นข้อมูล 2 ชั้น และเขียนตามคำสั่ง (Antigravity)...", 65)
+
+    # Save full skill manuals into job_dir/SKILL_GUIDES.md so CLI command line never exceeds Windows 32KB limit
+    digest_skill_path = Path(r"C:\Users\User\.gemini\config\skills\viral-news-digest\SKILL.md")
+    spin_skill_path = Path(r"C:\Users\User\.gemini\config\skills\viral-news-spin\SKILL.md")
+    writer_skill_path = Path(r"C:\Users\User\.gemini\config\skills\viral-news-writer\SKILL.md")
+
+    guides_parts: List[str] = []
+    if output_mode == "viral_3_para":
+        if writer_skill_path.exists():
+            guides_parts.append("=== คู่มือสกิล `viral-news-writer` ===\n" + writer_skill_path.read_text(encoding="utf-8"))
+    elif output_mode == "strict_clip_only":
+        if digest_skill_path.exists():
+            guides_parts.append("=== คู่มือสกิล `viral-news-digest` ===\n" + digest_skill_path.read_text(encoding="utf-8"))
+    else:
+        if digest_skill_path.exists():
+            guides_parts.append("=== คู่มือสกิลหลัก `viral-news-digest` ===\n" + digest_skill_path.read_text(encoding="utf-8"))
+        if spin_skill_path.exists():
+            guides_parts.append("=== คู่มือสกิลบิดประเด็น `viral-news-spin` ===\n" + spin_skill_path.read_text(encoding="utf-8"))
+
+    skill_guides_file = job_dir / "SKILL_GUIDES.md"
+    skill_guides_file.write_text("\n\n" + ("\n\n" + "=" * 60 + "\n\n").join(guides_parts), encoding="utf-8")
 
     # Build instructions for Antigravity Agent
-    files_to_inspect = ["job_context.json"]
+    files_to_inspect = ["SKILL_GUIDES.md", "job_context.json"]
     if (job_dir / "transcript.txt").exists():
         files_to_inspect.append("transcript.txt")
     for s in all_contact_sheets:
@@ -365,78 +478,101 @@ async def process_job(
 
     files_list_str = ", ".join(f"`{fn}`" for fn in files_to_inspect)
 
-    if output_mode == "viral_3_para":
-        skill_path = Path(r"C:\Users\User\.gemini\config\skills\viral-news-writer\SKILL.md")
-    else:
-        skill_path = Path(r"C:\Users\User\.gemini\config\skills\viral-news-digest\SKILL.md")
-    skill_content = ""
-    if skill_path.exists():
-        try:
-            skill_content = skill_path.read_text(encoding="utf-8")
-        except Exception:
-            pass
+    core_rules = (
+        "  • ขั้นตอนที่ 1 (สืบย้อนหาต้นทางฉบับเต็มข้ามแพลตฟอร์ม 4 สเต็ป & อ่าน/ดูให้จบ 100% + รีเสิร์ชขุดลึก 2 ชั้นจนสุดซอย `search_web`):\n"
+        "    - ไม่ว่าจะเป็นรูปภาพ โพสต์ข้อความ หรือคลิปเสียง/เฟรมภาพ ต้องอ่านและดูตั้งแต่วินาทีแรกจนจบ 100% เสมอ\n"
+        "    - หากลิงก์ต้นทางเป็นคลิปสั้นไฮไลท์จากเพจตัดคลิปหรือโพสต์สรุปสั้นของเพจข่าว ห้ามหยุดแค่ข้อมูลตรงหน้าเด็ดขาด! ต้องนำถ้อยคำเฉพาะในคลิป + ชื่อบุคคล/บัญชีเจ้าตัว + จุดสังเกตภาพ ไปเสิร์ชกว้างข้ามแพลตฟอร์ม (เพจ/เฟซบุ๊กเจ้าตัว, YouTube คลิปเต็ม/รายการเต็ม, TikTok/Reels ต้นทาง และข่าวถอดบทสัมภาษณ์เต็ม) และแยก 'เสียงพูดจริงของผู้พูด' ออกจาก 'พาดหัวที่เพจตัดคลิปแปะทับหน้าจอเอง'\n"
+        "    - ค้น 2 ชั้น: ชั้นที่ 1 เก็บข้อเท็จจริง สถานะล่าสุด ตัวเลขจริง และคำชี้แจงทุกฝ่ายให้ครบ + ชั้นที่ 2 ขุดบทสัมภาษณ์ชีวิตจริงในอดีต จุดเริ่มต้นครอบครัว ความทรงจำ/เหตุการณ์จริงที่เกี่ยวข้อง หรือตัวบทกฎหมาย/ระเบียบต้นขั้วจริงอย่างน้อย 2-3 จุด (วางน้ำหนักสายกลางบนข้อเท็จจริงจริง ห้ามคิดแทนล้ำเส้นคำพูดจริงของเจ้าตัว)\n"
+        "  • ขั้นตอนที่ 2 (มาตรฐานการเขียน `Data-Led Chameleon Flow` & `Intra-Batch Divergence`):\n"
+        "    - โครงสร้างแต่ละกล่อง (ยกเว้นโหมด 3 ย่อหน้า): บล็อก 1 (1 บรรทัดเดี่ยวเปิดเรื่องคมๆ ตามจุดแข็งที่สุดของข้อมูลข่าวนั้น) -> เว้นบรรทัดว่าง `\\n\\n` -> บล็อก 2 (เนื้อหาเจาะลึกรายจุด แยกทีละบรรทัด ไต่ระดับเหตุผลและอารมณ์ อธิบาย 'ทำไม' ไม่ใช่แค่ 'อะไร') -> เว้นบรรทัดว่าง `\\n\\n` -> บล็อก 3 (ขมวดจบตามธรรมชาติของเรื่อง 1 บรรทัด)\n"
+        "    - แบนคำแม่พิมพ์นักวิเคราะห์ซ้ำซาก 100%: ห้ามเปิดเรื่องด้วย 'เบื้องหลัง...', 'เหตุผลที่... มีที่มาจาก...', 'เส้นทางพลิกผันของ...', 'ท่ามกลางกระแส...' ห้ามขึ้นกลางเรื่องด้วย 'หากย้อนกลับไป...', 'ในทางธุรกิจ...' และห้ามจบเทศนาสั่งสอน ('จึงสะท้อนชัดเจนว่า...', 'จึงเป็นบทเรียนชีวิตจริงว่า...', 'จึงเป็นเครื่องพิสูจน์ว่า...', 'นี่แหละ...', 'จาก... กลายเป็น...')\n"
+        "    - หากงานนี้มีมากกว่า 1 กล่องข่าว (เช่น มุมปกติ + บิดประเด็น): ทุกกล่องต้องใช้ท่าเปิด จังหวะเดินเรื่อง จำนวนบรรทัด และท่าจบต่างโครงสร้างกัน 100% (`Intra-Batch Divergence`) และห้ามเอาท้ายข่าวปกติมาขยายซ้ำในข่าวบิดประเด็น\n"
+        "    - ความยาวบรรทัดมือถือ: แต่ละบรรทัดห้ามยาวเกิน ~220 ตัวอักษร (หากยาวเกินให้เคาะแยกบรรทัดตามจังหวะเหตุการณ์โดยไม่ตัดเนื้อหาออก)\n"
+        "    - กฎ 95/5 & Pre-Generator Filter & Meta Safety 100%: ปูสะพานเชื่อมแค่ครึ่งถึง 1 บรรทัดให้คนไม่ตามข่าวเข้าใจทันที ห้ามพ่วงคีย์เวิร์ดข่าวใหญ่เก่าที่ไม่เกี่ยว ห้ามใส่รหัสเทป EP.xxx หรือวันที่ราชการแข็งๆ ตัดคำอังกฤษปนไทยในเนื้อข่าวออก 100% และงดถ้อยคำที่ส่อผิดกฎชุมชน Meta 100%"
+    )
 
     if output_mode == "strict_clip_only":
         mode_instruction = (
-            "โหมด: ใช้เฉพาะข้อมูลที่ได้จากคลิป/ภาพ/ข้อความต้นทาง 100% เท่านั้น "
-            "(ห้ามใช้ search_web ค้นหาข่าวภายนอกมาปนเด็ดขาด) แล้วนำข้อเท็จจริงที่ได้มาสรุปใจความข่าวด้วยสกิลหลัก `viral-news-digest` "
-            "(โครงสร้าง 3 บล็อกเรียงบรรทัด: บล็อก 1 บรรทัดเปิดฮุค 1 บรรทัดเดี่ยว + บล็อก 2 บรรทัดปูแก่นเรื่องและแจกแจงดีเทลทีละบรรทัด + บล็อก 3 บรรทัดปิดท้ายขยี้คุณค่าและเปรียบเทียบ Before/After)"
+            "โหมดที่เลือก: แกะเฉพาะในคลิป/โพสต์ 100% (`strict_clip_only` -> สร้าง 1 กล่องข่าวใน `articles` โดย `label` = `'เฉพาะในคลิป 100%'`)\n"
+            "  • ใช้เฉพาะข้อมูลที่ได้จากคลิป/ภาพ/ข้อความต้นทาง 100% เท่านั้น (ห้ามใช้ `search_web` ค้นหาข่าวภายนอกมาปนเด็ดขาด) แล้วสรุปใจความข่าวด้วยสกิล `viral-news-digest` (โครงสร้าง 3 บล็อก ไร้คำเกริ่นแม่พิมพ์ 'เบื้องหลัง...' และไร้คำสรุปเทศนา)"
         )
     elif output_mode == "viral_3_para":
         mode_instruction = (
-            "โหมด: เล่าเรื่องไวรัล 3 ย่อหน้าสั้น (`viral-news-writer` — จับ 1 ประเด็นบริสุทธิ์ที่เข้ากัน 100% ร้อยเรียงเป็นเหตุเป็นผล อ่านง่ายจนจบจริง ห้ามตบสรุปสั่งสอนแบบเรียงความ)"
+            "โหมดที่เลือก: ข่าวสั้นไวรัล 3 ย่อหน้า (`viral_3_para` -> สร้าง 1 กล่องข่าวใน `articles` โดย `label` = `'ข่าวสั้น 3 ย่อหน้า'`)\n"
+            "  • ค้นเช็กข้อเท็จจริงให้แม่นยำ แล้วเขียนด้วยสกิล `viral-news-writer` (3 ย่อหน้ากระชับ จับ 1 ประเด็นบริสุทธิ์ เปิดคมไร้คำเกริ่นเรียงความ จบด้วยข้อเท็จจริงคมๆ อ่านจบใน 10-15 วินาที)"
+        )
+    elif output_mode == "normal_1_spin_1":
+        mode_instruction = (
+            "โหมดที่เลือก: **มุมปกติ 1 ข่าว + บิดประเด็น 1 ข่าว** (`normal_1_spin_1` -> สร้าง **2 กล่องข่าวแยกกัน** ในอาร์เรย์ `articles`):\n"
+            "  1. กล่องที่ 1 (`label`: `'มุมปกติ'`, `title`: `'1. ข่าวแบบมุมปกติ (สรุปประเด็นหลักสั้นๆ)'`): สรุปใจความข่าวหลักครบวงจร ต้นเหตุ -> กลไก/เหตุผลจริง -> คำชี้แจงครบทุกฝ่าย -> จุดคลายปม ด้วยสกิล `viral-news-digest`\n"
+            "  2. กล่องที่ 2 (`label`: `'บิดประเด็น'`, `title`: `'2. ข่าวแบบบิดประเด็น (ระบุชื่อมุมที่บิดสั้นๆ)'`): ใช้สกิล `viral-news-spin` คู่กับ `viral-news-digest` — หากพนักงานระบุความต้องการ/แนวที่อยากบิดไว้ด้านล่าง ต้องยึดแนวนั้นเป็นแกนหลักพร้อมขุดข้อมูลจริง 3-4 ฉากสำคัญมารองรับให้คนอ่านอินจนจบ (หากพนักงานไม่ได้ระบุแนวเฉพาะ ให้คัดเลือก 1 ใน 8 สูตรบิดประเด็นที่มีน้ำหนักข้อมูลจริงสูงที่สุดและเป็นคนละห้องข้อมูลกับกล่องที่ 1)\n"
+            f"{core_rules}"
+        )
+    elif output_mode == "normal_1_spin_2":
+        mode_instruction = (
+            "โหมดที่เลือก: **มุมปกติ 1 ข่าว + บิดประเด็น 2 ข่าว** (`normal_1_spin_2` -> สร้าง **3 กล่องข่าวแยกกัน** ในอาร์เรย์ `articles`):\n"
+            "  1. กล่องที่ 1 (`label`: `'มุมปกติ'`, `title`: `'1. ข่าวแบบมุมปกติ (...)'`): สรุปใจความข่าวหลักครบวงจรด้วยสกิล `viral-news-digest`\n"
+            "  2. กล่องที่ 2 (`label`: `'บิดประเด็น 1'`, `title`: `'2. ข่าวแบบบิดประเด็น มุมที่ 1 (...)'`): บิดประเด็นมุมที่ 1 ตามแนวความต้องการของพนักงาน (หรือสูตรที่ข้อมูลแน่นที่สุด)\n"
+            "  3. กล่องที่ 3 (`label`: `'บิดประเด็น 2'`, `title`: `'3. ข่าวแบบบิดประเด็น มุมที่ 2 (...)'`): บิดประเด็นมุมที่ 2 ที่ฉีกคนละมุม/คนละห้องข้อมูลกับกล่องที่ 1 และ 2 อย่างสิ้นเชิง\n"
+            f"{core_rules}"
+        )
+    elif output_mode == "spin_only_1":
+        mode_instruction = (
+            "โหมดที่เลือก: **บิดประเด็นล้วน 1 ข่าว** (`spin_only_1` -> สร้าง **1 กล่องข่าว** ในอาร์เรย์ `articles` โดย `label` = `'บิดประเด็น'`):\n"
+            "  • ใช้สกิล `viral-news-spin` คู่กับ `viral-news-digest` เจาะมุมบิดตามความต้องการของพนักงาน (หรือคัดสูตรบิดที่น้ำหนักข้อมูลสูงสุด) โดยมีสะพานปูที่มาข่าวหลักสั้นๆ ครึ่งถึง 1 บรรทัด (กฎ 95/5) ให้คนไม่เคยตามข่าวอ่านกล่องนี้กล่องเดียวก็เข้าใจและอินจนจบ\n"
+            f"{core_rules}"
         )
     else:
         mode_instruction = (
-            "โหมดมาตรฐาน (2 ขั้นตอนอัตโนมัติ: ค้นข้อมูลเชิงลึกรอบด้าน 4-Lock -> สรุปใจความข่าวเจาะลึกรายบุคคล/รายประเด็นด้วยสกิลหลัก `viral-news-digest`):\n"
-            "  • ขั้นตอนที่ 1 (สกัดข้อเท็จจริง + ค้นข้อมูลเชิงลึกเบื้องหลัง `search_web`): ห้ามหยุดแค่ข้อมูลผิวเผินในลิงก์เดียว! ต้องใช้ `search_web` ค้นข้อมูลเชิงลึกของบุคคลและต้นสายปลายเหตุในข่าว (เช่น แต่ละคนคือใคร มีที่มาอย่างไร ทำไมถึงเกิดเรื่องนี้ ตัวเลขแต่ละก้อนมาจากใคร) เหมือนต้นแบบข่าวบุ๋มที่เจาะลึกว่าลูกบุญธรรมทั้ง 9 คนแต่ละคนชื่ออะไร เรียนจบที่ไหน ทำงานอะไร\n"
-            "  • ขั้นตอนที่ 2 (สรุปใจความข่าวด้วยสกิลหลัก `viral-news-digest` ก่อนส่งผลลัพธ์): นำข้อมูลเชิงลึกทั้งหมดมาเรียบเรียงด้วยภาษามนุษย์ของเราเอง 100% (ห้ามเล่าแบบรายงานข่าวตามวันที่ และห้ามก๊อปคำแถลงการณ์ข้อ 1-2-3) ตามโครงสร้าง 3 บล็อกด้านล่างนี้:\n"
-            "    - บล็อกที่ 1 (บรรทัดเปิดฮุค 1 บรรทัดเดี่ยว): เปิดด้วยประโยคสั้นๆ 1 บรรทัดที่ชูจุดเปรียบเทียบ/ความขัดแย้งเชิงบวก หรือแก่นที่ทัชใจที่สุด + ชื่อตัวเอก แล้วเว้นบรรทัดว่าง (`\\n\\n`)\n"
-            "    - บล็อกที่ 2 (บรรทัดปูแก่นเรื่อง + เจาะลึกรายบุคคล/รายประเด็นทีละบรรทัด): บรรทัดแรกสรุปที่มาของเรื่อง จากนั้นขึ้นบรรทัดใหม่เจาะลึกทีละคน/ทีละประเด็นสำคัญ (`[ชื่อคน/ประเด็นหลัก] + [ข้อมูลเชิงลึกเฉพาะเจาะจงที่ข่าวทั่วไปไม่ได้บอกครบ] + [ผลลัพธ์/สถานะ]`) โดยไม่เรียงเป็นรายงานตามวันที่และไม่ใส่เครื่องหมายหัวข้อ (`-` หรือ `•`) ปิดท้ายบล็อกด้วยบรรทัดสรุปภาพรวมส่วนที่เหลือ (`และยังมี...`)\n"
-            "    - บล็อกที่ 3 (บรรทัดปิดท้ายขยี้คุณค่าและเปรียบเทียบ Before -> After): เว้นบรรทัดว่าง (`\\n\\n`) แล้วปิดท้าย 1–2 บรรทัดด้วยคำสะท้อนคุณค่าจริงใจแบบภาษามนุษย์ (`นี่แหละ...`) พร้อมภาพเปรียบเทียบจากจุดเดิม (Before) สู่ผลลัพธ์ที่เปลี่ยนไป (After)"
+            "โหมดที่เลือก: **มุมปกติ 1 ข่าว** (`standard_4lock` -> สร้าง **1 กล่องข่าว** ในอาร์เรย์ `articles` โดย `label` = `'มุมปกติ'`, ยกเว้นกรณีที่ข้อความคำสั่งของพนักงานด้านล่างระบุชัดเจนว่าขอหลายข่าวหรือขอบิดประเด็นเพิ่ม ให้สร้างจำนวนกล่องใน `articles` ตามคำสั่งพนักงานได้เลย!):\n"
+            f"{core_rules}"
         )
 
-    focus_str = f"\nประเด็นที่พนักงานสั่งเน้นเป็นพิเศษ: {focus_instruction}\n" if focus_instruction else ""
+    focus_str = (
+        f"\n🔥 **คำสั่ง/ความต้องการพิเศษจากพนักงาน (สำคัญสูงสุด — ต้องทำตามแนวทางและจำนวนข่าวที่สั่งให้ครบถ้วนแม่นยำ):**\n"
+        f"\"{focus_instruction}\"\n"
+        if focus_instruction
+        else ""
+    )
 
-    prompt = f"""คุณคือระบบวิเคราะห์และสรุปใจความข่าวไวรัลความแม่นยำสูง (4-Lock Fact Extraction + `viral-news-digest` Skill)
-ในโฟลเดอร์งาน `{job_dir.as_posix()}` มีไฟล์ที่ดึงมาจากต้นทางเรียบร้อยแล้ว ได้แก่: {files_list_str}
-
-=== คู่มือสกิลสรุปใจความข่าวหลักบังคับ (`viral-news-digest`) ===
-{skill_content}
-=========================================================
+    prompt = f"""คุณคือระบบวิเคราะห์ สรุปใจความข่าว และบิดประเด็นข่าวไวรัลความแม่นยำสูง (4-Lock Fact Extraction + `viral-news-digest` + `viral-news-spin`)
+ในโฟลเดอร์งาน `{job_dir.as_posix()}` มีไฟล์ที่เตรียมไว้เรียบร้อยแล้ว ได้แก่: {files_list_str}
 
 ขั้นตอนการทำงานบังคับ:
-1. ใช้เครื่องมือ `read_file` เปิดอ่านไฟล์ทั้งหมดในรายการด้านบน:
-   - อ่าน `job_context.json` เพื่อดูวันเวลาโพสต์จริง (upload_timestamp), แคปชัน, ชื่อผู้โพสต์ และข้อความจากพนักงาน
+1. ใช้เครื่องมือ `read_file` เปิดอ่านไฟล์ทั้งหมดในรายการด้านบนเป็นอันดับแรก:
+   - **ต้องอ่าน `SKILL_GUIDES.md`** เพื่อยึดกฎทุกข้อของสกิล (`viral-news-digest` / `viral-news-spin` / `Data-Led Chameleon Flow`) แบบ 100%
+   - อ่าน `job_context.json` เพื่อดูวันเวลาโพสต์จริง (`upload_timestamp`), แคปชัน, ชื่อผู้โพสต์ และคำสั่งจากพนักงาน
    - หากมีไฟล์ภาพ Contact Sheet (`sheet_1.jpg`, `sheet_2.jpg`, ...) หรือภาพที่พนักงานอัปโหลด (`uploaded_*`) ต้องเปิดดูด้วย `read_file` ทุกไฟล์ เพื่อดูเหตุการณ์ การกระทำ สีหน้า สถานที่ ป้ายข้อความในภาพ
-   - **กรณีคลิปกล้องวงจรปิด (CCTV) / กล้องหน้ารถ / คลิปเหตุการณ์ที่ไม่มีเสียงบรรยาย:** ให้ใช้การอ่านภาพทีละเฟรมตามตัวเลขวินาทีสีเหลืองมุมซ้ายบนของแต่ละช่องภาพ เพื่อไล่ลำดับการกระทำเป็นฉากๆ อย่างละเอียด:
-     (ก) สภาพแวดล้อมและจุดสังเกตจริงจากภาพ 100% (ดูท้องฟ้า/แสงแดดว่าเป็นเวลากลางวันแดดจ้าหรือกลางคืน ห้ามมโนเวลาเป็นกลางดึกเด็ดขาดหากท้องฟ้าสว่าง, ป้ายร้าน/ป้ายถนน, ลักษณะบุคคล/สีเสื้อผ้า/แบรนด์กล่องท้ายรถ, ยี่ห้อ/สีรถ)
-     (ข) จังหวะเริ่มต้นก่อนเกิดเหตุ (ใครอยู่เลนไหน/ตรงไหน กำลังทำท่าทางอะไร เช่น โบกมือขอทาง)
-     (ค) จังหวะเกิดเหตุสำคัญ/จุดพีค (แยกแยะใบหน้าและสีเสื้อผ้าให้แม่นยำว่าใครเป็นคนทำกิริยาไหน ห้ามสลับตัวบุคคลเด็ดขาด)
-     (ง) จังหวะต่อเนื่องและผลลัพธ์ตอนจบคลิป (คนรอบข้างทำอย่างไร เหตุการณ์จบลงตรงไหนอย่างไร)
-   - หากมีไฟล์เสียง `audio.mp3` ต้องเปิดฟังด้วย `read_file` เพื่อแกะคำพูดและบทสัมภาษณ์จริงในคลิป (หรือฟังเสียงสภาพแวดล้อม เช่น เสียงแตร เสียงชน เสียงตะโกน)
+   - **กรณีคลิปกล้องวงจรปิด (CCTV) / กล้องหน้ารถ / คลิปเหตุการณ์ที่ไม่มีเสียงบรรยาย:** ให้ไล่อ่านภาพทีละเฟรมตามเวลาวินาทีสีเหลืองมุมซ้ายบน (ดูแสงแดดกลางวัน/กลางคืนจริง ห้ามมโนเวลา, แยกสีเสื้อผ้า/บุคคลให้แม่นยำ ห้ามสลับคน)
+   - หากมีไฟล์เสียง `audio.mp3` ต้องเปิดฟังด้วย `read_file` ตั้งแต่วินาทีแรกจนจบ เพื่อแกะคำพูดจริงของผู้พูด 100%
 2. {mode_instruction}
 {focus_str}
-3. กฎล็อกความแม่นยำ 4 ชั้น (4-Lock Verification) เมื่อต้องค้นเชื่อมโยงด้วย `search_web`:
-   - Lock 1 (Timestamp Lock): ยึดช่วงเวลาเดียวกับ `upload_timestamp` ในคลิป/โพสต์ ห้ามนำข่าวเก่าคนละปีมาปน
-   - Lock 2 (Clip Genre Gate): ถ้าเป็นคลิปคนดัง/ข่าวใหญ่/ตัดจากรายการ ให้ค้นเชื่อมโยงต้นเรื่องและชื่อ-นามสกุลเต็ม แต่ถ้าเป็นคลิปชาวบ้านทั่วไป/กล้องวงจรปิดที่ไม่มีสำนักข่าวรายงานเคสเดียวกันเป๊ะๆ ห้ามนำข่าวคล้ายกันจากเคสอื่นมาสวมทับเด็ดขาด ให้ใช้เฉพาะสิ่งที่เห็นและได้ยินในคลิป 100%
-   - Lock 3 (3-Point Match): ข้อมูลที่ค้นมาต้องตรงกับภาพและเสียงในคลิปครบ 3 จุด (บุคคลเดียวกัน + ชุด/สถานที่/บรรยากาศตรงกัน + ช่วงเวลาเดียวกัน)
-   - Lock 4 (Audit Tag): ระบุที่มาและการตรวจสอบความแม่นยำให้ชัดเจน
-   - Speed Guardrail (ป้องกัน Timeout): หากใน `job_context.json` มีเนื้อหาครบถ้วนอยู่แล้ว หรือต้องการค้นบริบทเสริมด้วย `search_web` ให้ค้นหาอย่างกระชับไม่เกิน 1-2 ครั้งเท่านั้น แล้วเขียนไฟล์ `result.json` ทันที ห้ามค้นหาวนซ้ำเกิน 2 ครั้งเด็ดขาด
+3. กฎล็อกความแม่นยำ 4 ชั้น (4-Lock Verification) เมื่อค้นข้อมูลด้วย `search_web`:
+   - Lock 1 (Timestamp Lock): ยึดช่วงเวลาเดียวกับ `upload_timestamp` ในคลิป/โพสต์ ห้ามนำข่าวคนละปีมาปน (ยกเว้นการขุดประวัติ/ไทม์ไลน์อดีตของบุคคลเดียวกันเพื่อนำมาบิดประเด็นตามข้อเท็จจริงจริง)
+   - Lock 2 (Clip Genre Gate): ถ้าเป็นคลิปคนดัง/ข่าวสาธารณะ/ตัดจากรายการ ให้ค้นเชื่อมโยงต้นเรื่องเต็มและข้อมูลชั้นที่ 2 แต่ถ้าเป็นคลิปชาวบ้านทั่วไป/CCTV ที่ไม่มีข่าวรายงานเคสเดียวกันเป๊ะๆ ห้ามนำข่าวเคสอื่นมาสวมทับ
+   - Lock 3 (3-Point Match): ข้อมูลต้องตรงบุคคล + สถานที่/เหตุการณ์ + ช่วงเวลา
+   - Speed Guardrail: ใช้ `search_web` ค้นหาต้นทางเต็มและขุดข้อมูลชั้นที่ 2 อย่างตรงเป้า 2-5 ครั้งให้ได้ชุดข้อเท็จจริงที่แน่นและลึกพอ แล้วเขียนไฟล์ `result.json` ทันที (ห้ามค้นวนคำเดิมซ้ำๆ)
 
-เมื่อวิเคราะห์และสรุปใจความข่าวด้วยสกิล `viral-news-digest` เสร็จแล้ว ให้บันทึกผลลัพธ์เป็นไฟล์ JSON ชื่อ `result.json` ลงในโฟลเดอร์ `{job_dir.as_posix()}/result.json` ด้วยเครื่องมือ `write_file` (และพิมพ์ JSON เดียวกันออกมาเป็นคำตอบสุดท้ายด้วย) โดยมีโครงสร้าง JSON ดังนี้เท่านั้น:
+เมื่อเขียนและตรวจ QC ทุกบรรทัดเสร็จแล้ว (เช็กซ้ำว่าไร้คำต้องห้าม 'เบื้องหลัง...' / 'จึงสะท้อนชัดเจนว่า...', ไร้คำอังกฤษปนไทยในเนื้อข่าว, แต่ละบรรทัดไม่เกิน 220 ตัวอักษร, และใน `content` ของแต่ละกล่องใส่เฉพาะตัวเนื้อข่าวล้วนๆ ห้ามใส่หัวข้อนำหน้าซ้ำใน `content` และห้ามครอบด้วย ```text) ให้บันทึกผลลัพธ์ลงไฟล์ `{job_dir.as_posix()}/result.json` ด้วย `write_file` (และพิมพ์ JSON เดียวกันออกมาเป็นคำตอบสุดท้าย) ตามโครงสร้างนี้เท่านั้น:
 {{
-  "headline": "หัวข้อสรุปประเด็นข่าวสั้นๆ เข้าใจทันที",
-  "raw_news": "เนื้อข่าวที่สรุปเสร็จสมบูรณ์ด้วยสกิลหลัก viral-news-digest (โครงสร้าง 3 บล็อกเรียงบรรทัด: บรรทัดฮุคเดี่ยว + บรรทัดปูแก่นและแจกแจงดีเทลทีละบรรทัด + บรรทัดปิดท้ายขยี้คุณค่าและเปรียบเทียบ Before/After)",
+  "headline": "หัวข้อสรุปเคสข่าวสั้นๆ เข้าใจทันที",
+  "articles": [
+    {{
+      "label": "มุมปกติ",
+      "title": "1. ข่าวแบบมุมปกติ (สรุปแกนหลักสั้นๆ)",
+      "content": "บรรทัดเปิดเรื่องคมๆ 1 บรรทัด\\n\\nบรรทัดเนื้อหาเจาะลึกจุดที่ 1\\nบรรทัดเนื้อหาเจาะลึกจุดที่ 2\\nบรรทัดเนื้อหาเจาะลึกจุดที่ 3\\n\\nบรรทัดขมวดจบตามธรรมชาติ 1 บรรทัด"
+    }}
+  ],
+  "raw_news": "เนื้อข่าวรวมทุกกล่อง",
   "visual_audio_breakdown": "สรุปข้อเท็จจริงดิบที่สกัดได้จากภาพ-เสียงในคลิปหรือบทความต้นทางแบบละเอียด",
-  "context_connected": "ข้อมูลบริบทต้นเรื่องหรือชื่อเต็มที่ค้นเชื่อมโยงเพิ่มเติม (หากไม่ได้ค้นเพิ่มให้ระบุว่า 'ใช้ข้อมูลจากต้นฉบับในคลิป/โพสต์ 100%')",
-  "audit_tag": "✅ [ที่มาข้อมูล: ระบุชัดเจนว่าแกะจากภาพ-เสียงในคลิป/ต้นทาง 100% และ/หรือ เชื่อมโยงข่าวจริงวันที่เท่าไหร่ + สรุปด้วยสกิลหลัก viral-news-digest]",
+  "context_connected": "ข้อมูลต้นทางฉบับเต็มและข้อมูลเชิงลึกชั้นที่ 2 ที่ค้นเชื่อมโยงเพิ่มเติม (หากไม่ได้ค้นเพิ่มให้ระบุว่า 'ใช้ข้อมูลจากต้นฉบับในคลิป/โพสต์ 100%')",
+  "audit_tag": "✅ [ที่มาข้อมูล: ระบุแหล่งต้นทางจริง + ข้อมูลชั้นที่ 2 ที่ค้นตรวจซ้ำ + ผ่าน QC Data-Led Chameleon Flow]",
   "fact_check_references": [
     {{
-      "claim": "ประเด็น/ข้อเท็จจริงแต่ละบรรทัดที่นำมาเขียนในเนื้อข่าว",
-      "verify_where": "จุดที่พนักงานต้องตรวจซ้ำ (ระบุให้ชัดเจน เช่น 'นาทีที่ 07:09 ในคลิปสัมภาษณ์', 'เฟรมวินาทีที่ 1s-11s ในภาพ Sheet 1', หรือ 'ย่อหน้าที่ 3 ของข่าวต้นฉบับ / ภาพโพสต์คำชี้แจงข้อ 3')",
-      "source_label": "ชื่อแหล่งอ้างอิง (เช่น คลิปต้นฉบับ YouTube / ข่าวสด / อมรินทร์ทีวี / ภาพหลักฐานที่แนบ)",
-      "source_url": "ลิงก์ URL ของแหล่งอ้างอิงนั้นๆ (ถ้าเป็น YouTube สามารถใส่ ?t=...s เพื่อกระโดดไปนาทีนั้นได้เลย)"
+      "claim": "ประเด็น/ข้อเท็จจริงสำคัญที่นำมาเขียนในเนื้อข่าว",
+      "verify_where": "จุดที่พนักงานตรวจซ้ำได้ (เช่น นาทีในคลิป / เฟรมวินาทีใน Sheet / ย่อหน้าในข่าวต้นทาง)",
+      "source_label": "ชื่อแหล่งอ้างอิง",
+      "source_url": "ลิงก์ URL แหล่งอ้างอิง"
     }}
   ]
 }}"""
@@ -449,7 +585,7 @@ async def process_job(
         "--print", prompt,
     ]
 
-    agy_res = await run_subprocess(cmd_agy, cwd=job_dir, timeout=300)
+    agy_res = await run_subprocess(cmd_agy, cwd=job_dir, timeout=480)
     progress_cb("กำลังจัดรูปแบบผลลัพธ์และบันทึกข้อมูล...", 92)
 
     result_data: Optional[Dict[str, Any]] = None
@@ -463,9 +599,8 @@ async def process_job(
             result_data = None
 
     if not result_data:
-        # Try parsing JSON from stdout
         stdout_text = agy_res.stdout or ""
-        m = re.search(r"\{[\s\S]*\"raw_news\"[\s\S]*\}", stdout_text)
+        m = re.search(r"\{[\s\S]*(\"articles\"|\"raw_news\")[\s\S]*\}", stdout_text)
         if m:
             try:
                 result_data = json.loads(m.group(0))
@@ -482,6 +617,7 @@ async def process_job(
             "audit_tag": "✅ [ที่มาข้อมูล: ประมวลผลผ่าน Antigravity Agent บนเครื่องแม่]",
         }
 
+    result_data = _normalize_result_articles(result_data, output_mode)
     result_data["contact_sheets"] = [f"/jobs/{job_id}/{s}" for s in all_contact_sheets]
     result_data["uploaded_images"] = [f"/jobs/{job_id}/{img}" for img in image_files]
     result_data["metadata"] = extracted_meta

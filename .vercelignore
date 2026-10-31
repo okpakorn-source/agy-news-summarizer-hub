@@ -1,4 +1,5 @@
 jobs_data/
+backups/
 jobs.db
 tunnel_url.txt
 __pycache__/
