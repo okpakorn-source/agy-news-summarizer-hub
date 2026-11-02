@@ -7,6 +7,7 @@ import socket
 import sqlite3
 import asyncio
 import datetime
+import threading
 import subprocess
 import requests
 from pathlib import Path
@@ -53,6 +54,7 @@ if not IS_VERCEL:
 # Limit concurrent heavy AI + video jobs to 2 at a time so Host PC remains smooth
 WORKER_SEMAPHORE = asyncio.Semaphore(2)
 ACTIVE_LOCAL_JOBS: Set[str] = set()
+DB_SYNC_LOCK = threading.Lock()
 
 
 def extract_urls_from_text(text: str) -> List[str]:
@@ -75,6 +77,7 @@ def parse_chat_style_submission(
     raw_text: str,
     focus_instruction: str,
     output_mode: str,
+    skill_set: str = "skill_set_5",
 ):
     """Allow pasting 'ทำข่าวนี้มุมปกติ 1 ข่าว บิดประเด็น 1 ข่าว ขอแนว... https://...' in one box."""
     urls = extract_urls_from_text(urls_input)
@@ -97,7 +100,16 @@ def parse_chat_style_submission(
     elif "ปกติ" in low_focus and "บิด" in low_focus and output_mode == "standard_4lock":
         output_mode = "normal_1_spin_1"
 
-    return urls, merged_focus, output_mode
+    # Auto-detect skill_set if employee explicitly typed ชุดสกิลที่ 1..5 or วิธีที่ 1..5 in text
+    for num in ("1", "2", "3", "4", "5"):
+        if f"ชุดสกิลที่ {num}" in low_focus or f"ชุดสกิลที่{num}" in low_focus or f"วิธีที่ {num}" in low_focus or f"วิธีที่{num}" in low_focus:
+            skill_set = f"skill_set_{num}"
+            break
+
+    if skill_set not in ("skill_set_1", "skill_set_2", "skill_set_3", "skill_set_4", "skill_set_5"):
+        skill_set = "skill_set_5"
+
+    return urls, merged_focus, output_mode, skill_set
 
 
 def get_db():
@@ -118,6 +130,7 @@ def init_db():
             raw_text TEXT,
             focus_instruction TEXT,
             output_mode TEXT,
+            skill_set TEXT DEFAULT 'skill_set_5',
             status TEXT,
             progress_text TEXT,
             progress_pct INTEGER,
@@ -126,6 +139,10 @@ def init_db():
             completed_at TEXT
         )
     """)
+    try:
+        conn.execute("ALTER TABLE jobs ADD COLUMN skill_set TEXT DEFAULT 'skill_set_5'")
+    except Exception:
+        pass
     conn.commit()
     conn.close()
 
@@ -168,6 +185,7 @@ def sync_row_to_supabase(job_id: str):
             "raw_text": item["raw_text"],
             "focus_instruction": item["focus_instruction"],
             "output_mode": item["output_mode"],
+            "skill_set": item.get("skill_set") or "skill_set_5",
             "status": item["status"],
             "progress_text": item["progress_text"],
             "progress_pct": item["progress_pct"],
@@ -181,21 +199,24 @@ def sync_row_to_supabase(job_id: str):
 
 
 def update_job_progress(job_id: str, status: str, text: str, pct: int, result_dict: Optional[dict] = None):
-    conn = get_db()
-    if result_dict is not None:
-        now_str = now_th().strftime("%Y-%m-%d %H:%M:%S")
-        conn.execute(
-            "UPDATE jobs SET status=?, progress_text=?, progress_pct=?, result_json=?, completed_at=? WHERE id=?",
-            (status, text, pct, json.dumps(result_dict, ensure_ascii=False), now_str, job_id),
-        )
-    else:
-        conn.execute(
-            "UPDATE jobs SET status=?, progress_text=?, progress_pct=? WHERE id=?",
-            (status, text, pct, job_id),
-        )
-    conn.commit()
-    conn.close()
-    sync_row_to_supabase(job_id)
+    with DB_SYNC_LOCK:
+        conn = get_db()
+        if result_dict is not None:
+            now_str = now_th().strftime("%Y-%m-%d %H:%M:%S")
+            cur = conn.execute(
+                "UPDATE jobs SET status=?, progress_text=?, progress_pct=?, result_json=?, completed_at=? WHERE id=?",
+                (status, text, pct, json.dumps(result_dict, ensure_ascii=False), now_str, job_id),
+            )
+        else:
+            cur = conn.execute(
+                "UPDATE jobs SET status=?, progress_text=?, progress_pct=? WHERE id=? AND status NOT IN ('completed', 'failed')",
+                (status, text, pct, job_id),
+            )
+        updated = cur.rowcount > 0
+        conn.commit()
+        conn.close()
+        if updated or result_dict is not None:
+            sync_row_to_supabase(job_id)
 
 
 def upload_job_media_to_cloud(job_id: str, job_dir: Path, result_dict: dict) -> dict:
@@ -243,7 +264,11 @@ async def background_worker(
     focus_instruction: str,
     output_mode: str,
     image_files: List[str],
+    skill_set: str = "skill_set_5",
 ):
+    import importlib
+    import processor
+    importlib.reload(processor)
     from processor import process_job
 
     ACTIVE_LOCAL_JOBS.add(job_id)
@@ -252,7 +277,11 @@ async def background_worker(
             await asyncio.to_thread(update_job_progress, job_id, "processing", "เครื่องแม่กำลังเริ่มประมวลผล...", 12)
 
             def cb(msg: str, pct: int):
-                update_job_progress(job_id, "processing", msg, pct)
+                try:
+                    loop = asyncio.get_running_loop()
+                    loop.create_task(asyncio.to_thread(update_job_progress, job_id, "processing", msg, pct))
+                except RuntimeError:
+                    update_job_progress(job_id, "processing", msg, pct)
 
             result = await process_job(
                 job_id=job_id,
@@ -263,6 +292,7 @@ async def background_worker(
                 output_mode=output_mode,
                 image_files=image_files,
                 progress_cb=cb,
+                skill_set=skill_set,
             )
             result = await asyncio.to_thread(upload_job_media_to_cloud, job_id, job_dir, result)
             await asyncio.to_thread(update_job_progress, job_id, "completed", "สรุปเนื้อข่าวเสร็จสมบูรณ์!", 100, result)
@@ -298,10 +328,18 @@ async def supabase_cloud_poller():
                 jid = cj.get("id")
                 if not jid:
                     continue
+                if cj.get("status") == "processing" and jid not in ACTIVE_LOCAL_JOBS:
+                    conn = get_db()
+                    loc_row = conn.execute("SELECT status FROM jobs WHERE id = ?", (jid,)).fetchone()
+                    conn.close()
+                    if loc_row and loc_row["status"] in ("completed", "failed"):
+                        await asyncio.to_thread(sync_row_to_supabase, jid)
+                        continue
                 if cj.get("status") == "queued" and jid not in ACTIVE_LOCAL_JOBS:
                     ACTIVE_LOCAL_JOBS.add(jid)
                     job_dir = JOBS_DIR / jid
                     job_dir.mkdir(parents=True, exist_ok=True)
+                    cj_skill_set = cj.get("skill_set") or "skill_set_5"
 
                     saved_images: List[str] = []
                     for idx, img_url in enumerate(cj.get("uploaded_image_urls") or []):
@@ -319,8 +357,8 @@ async def supabase_cloud_poller():
                     conn = get_db()
                     conn.execute(
                         """
-                        INSERT OR REPLACE INTO jobs (id, employee_name, urls_json, raw_text, focus_instruction, output_mode, status, progress_text, progress_pct, result_json, created_at, completed_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        INSERT OR REPLACE INTO jobs (id, employee_name, urls_json, raw_text, focus_instruction, output_mode, skill_set, status, progress_text, progress_pct, result_json, created_at, completed_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                         (
                             jid,
@@ -329,6 +367,7 @@ async def supabase_cloud_poller():
                             cj.get("raw_text", ""),
                             cj.get("focus_instruction", ""),
                             cj.get("output_mode", "normal_1_spin_1"),
+                            cj_skill_set,
                             "queued",
                             "เครื่องแม่รับงานเข้าคิวแล้ว รอสล็อตประมวลผล...",
                             10,
@@ -349,6 +388,7 @@ async def supabase_cloud_poller():
                             focus_instruction=cj.get("focus_instruction", ""),
                             output_mode=cj.get("output_mode", "normal_1_spin_1"),
                             image_files=saved_images,
+                            skill_set=cj_skill_set,
                         )
                     )
         except Exception:
@@ -457,10 +497,11 @@ async def submit_job(
     raw_text: str = Form(""),
     focus_instruction: str = Form(""),
     output_mode: str = Form("normal_1_spin_1"),
+    skill_set: str = Form("skill_set_5"),
     images: List[UploadFile] = File(default=[]),
 ):
-    urls, focus_instruction, output_mode = parse_chat_style_submission(
-        urls_input, raw_text, focus_instruction, output_mode
+    urls, focus_instruction, output_mode, skill_set = parse_chat_style_submission(
+        urls_input, raw_text, focus_instruction, output_mode, skill_set
     )
 
     valid_images = [img for img in images if img and img.filename]
@@ -490,6 +531,7 @@ async def submit_job(
             "raw_text": raw_text.strip(),
             "focus_instruction": focus_instruction.strip(),
             "output_mode": output_mode,
+            "skill_set": skill_set,
             "status": "queued",
             "progress_text": "ส่งเข้าคิว Cloud (Supabase) แล้ว รอเครื่องแม่ดึงไปประมวลผล...",
             "progress_pct": 8,
@@ -520,8 +562,8 @@ async def submit_job(
     conn = get_db()
     conn.execute(
         """
-        INSERT INTO jobs (id, employee_name, urls_json, raw_text, focus_instruction, output_mode, status, progress_text, progress_pct, result_json, created_at, completed_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO jobs (id, employee_name, urls_json, raw_text, focus_instruction, output_mode, skill_set, status, progress_text, progress_pct, result_json, created_at, completed_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             job_id,
@@ -530,6 +572,7 @@ async def submit_job(
             raw_text.strip(),
             focus_instruction.strip(),
             output_mode,
+            skill_set,
             "queued",
             "อยู่ในคิวรอประมวลผล...",
             5,
@@ -551,6 +594,7 @@ async def submit_job(
             focus_instruction=focus_instruction.strip(),
             output_mode=output_mode,
             image_files=saved_images,
+            skill_set=skill_set,
         )
     )
 
@@ -677,6 +721,7 @@ async def retry_job(job_id: str):
                 "raw_text": item["raw_text"],
                 "focus_instruction": item["focus_instruction"],
                 "output_mode": item["output_mode"] or "normal_1_spin_1",
+                "skill_set": item.get("skill_set") or "skill_set_5",
                 "created_at": item["created_at"],
             }
     if not j:

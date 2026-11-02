@@ -101,8 +101,8 @@ def get_job_from_supabase(job_id: str) -> Optional[Dict[str, Any]]:
     return None
 
 
-def list_jobs_from_supabase(limit: int = 50) -> List[Dict[str, Any]]:
-    url = f"{SUPABASE_URL}/rest/v1/app_settings?key=like.agy_hub_job*&select=key,value&order=key.desc&limit={int(limit)}"
+def list_jobs_from_supabase(limit: int = 100) -> List[Dict[str, Any]]:
+    url = f"{SUPABASE_URL}/rest/v1/app_settings?key=like.agy_hub_job*&select=key,value&order=updated_at.desc&limit={int(limit)}"
     resp = requests.get(
         url,
         headers=_headers(),

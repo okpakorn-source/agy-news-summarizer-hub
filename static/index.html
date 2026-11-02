@@ -165,11 +165,54 @@
             </div>
           </div>
 
-          <!-- 3. Custom Requirement / Angle Box (Prominent upfront!) -->
+          <!-- 3. Skill Set Selector (5 Standalone Non-Overlapping Skill Sets!) -->
+          <div>
+            <div class="flex items-center justify-between mb-1.5">
+              <label class="block text-xs font-semibold text-slate-200">
+                3. 🧠 เลือกชุดสกิล / หลักการรีเสิร์ชและเล่าเรื่อง (แยก 5 ชุดสกิลชัดเจน)
+              </label>
+              <span class="text-[10px] text-sky-400 font-medium">ระบุชุดสกิลบนการ์ดทุกงาน</span>
+            </div>
+            <input type="hidden" id="skill-set" value="skill_set_5" />
+            <div class="space-y-1.5" id="skill-set-grid">
+              <button type="button" data-skill="skill_set_5" onclick="selectSkillSet('skill_set_5')"
+                class="skill-btn w-full text-left px-3 py-2 rounded-xl border transition bg-sky-500/15 border-sky-500 text-white shadow-sm">
+                <div class="text-xs font-bold text-sky-300 flex items-center justify-between">
+                  <span>⭐ ชุดสกิลที่ 5: ลูกผสม 3 มิติขั้นสุด (แนะนำ)</span>
+                  <span class="text-[10px] px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-200">ครบเครื่องที่สุด</span>
+                </div>
+                <div class="text-[10px] text-slate-300 mt-0.5">ผสานต้นทางครบ + ทะเบียนเอกสารรัฐ/ข้อกฎหมายจริง + ภาพจำหัวใจมนุษย์</div>
+              </button>
+              <div class="grid grid-cols-2 gap-1.5">
+                <button type="button" data-skill="skill_set_1" onclick="selectSkillSet('skill_set_1')"
+                  class="skill-btn text-left p-2 rounded-xl border transition bg-slate-950/70 border-slate-800 hover:border-slate-700 text-slate-200">
+                  <div class="text-[11px] font-bold">🕰️ ชุดสกิลที่ 1: ไทม์ไลน์อดีต</div>
+                  <div class="text-[10px] text-slate-400 mt-0.5">รีเสิร์ช 2 ชั้น & ย้อนภาพจำตามปี</div>
+                </button>
+                <button type="button" data-skill="skill_set_2" onclick="selectSkillSet('skill_set_2')"
+                  class="skill-btn text-left p-2 rounded-xl border transition bg-slate-950/70 border-slate-800 hover:border-slate-700 text-slate-200">
+                  <div class="text-[11px] font-bold">⚖️ ชุดสกิลที่ 2: ผ่าข้อกฎหมาย</div>
+                  <div class="text-[10px] text-slate-400 mt-0.5">เจาะมาตรากฎหมาย & ทะเบียนรัฐ</div>
+                </button>
+                <button type="button" data-skill="skill_set_3" onclick="selectSkillSet('skill_set_3')"
+                  class="skill-btn text-left p-2 rounded-xl border transition bg-slate-950/70 border-slate-800 hover:border-slate-700 text-slate-200">
+                  <div class="text-[11px] font-bold">⚡ ชุดสกิลที่ 3: เทียบตัวเลข/ท่าที</div>
+                  <div class="text-[10px] text-slate-400 mt-0.5">วางคู่ขนาน 2 ฝั่งตัดกันหมัดต่อหมัด</div>
+                </button>
+                <button type="button" data-skill="skill_set_4" onclick="selectSkillSet('skill_set_4')"
+                  class="skill-btn text-left p-2 rounded-xl border transition bg-slate-950/70 border-slate-800 hover:border-slate-700 text-slate-200">
+                  <div class="text-[11px] font-bold">💬 ชุดสกิลที่ 4: เจาะ 1 ประโยค</div>
+                  <div class="text-[10px] text-slate-400 mt-0.5">ถอดรหัสคำพูดสั้นๆ ขยี้หัวใจมนุษย์</div>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 4. Custom Requirement / Angle Box (Prominent upfront!) -->
           <div>
             <div class="flex items-center justify-between mb-1.5">
               <label for="focus-instruction" class="block text-xs font-semibold text-slate-200">
-                3. 💬 ความต้องการ / แนวประเด็นที่อยากเน้นหรือบิด
+                4. 💬 ความต้องการ / แนวประเด็นที่อยากเน้นหรือบิด
               </label>
               <span class="text-[10px] text-emerald-400">พิมพ์สั่งเหมือนคุยแชตได้เลย</span>
             </div>
@@ -296,6 +339,20 @@
       strict_clip_only: '🎬 เฉพาะในคลิป 100%',
     };
 
+    const SKILL_SET_LABELS = {
+      skill_set_1: '🕰️ ชุดสกิลที่ 1: ไทม์ไลน์อดีต',
+      skill_set_2: '⚖️ ชุดสกิลที่ 2: ผ่าข้อกฎหมาย/ระเบียบรัฐ',
+      skill_set_3: '⚡ ชุดสกิลที่ 3: จับคู่เทียบตัวเลข/ท่าที',
+      skill_set_4: '💬 ชุดสกิลที่ 4: เจาะรหัส 1 ประโยคขยี้ใจ',
+      skill_set_5: '⭐ ชุดสกิลที่ 5: ลูกผสม 3 มิติขั้นสุด',
+    };
+
+    function getJobSkillSetTag(job) {
+      const res = job?.result || {};
+      const sk = job?.skill_set || res.skill_set || 'skill_set_5';
+      return SKILL_SET_LABELS[sk] || res.skill_set_short || '⭐ ชุดสกิลที่ 5: ลูกผสม 3 มิติขั้นสุด';
+    }
+
     const savedEmp = localStorage.getItem('agy_employee_name');
     if (savedEmp) {
       document.getElementById('employee-name').value = savedEmp;
@@ -334,6 +391,34 @@
         const firstLine = btn.querySelector('div:first-child');
         if (firstLine) {
           firstLine.className = active ? 'text-xs font-bold text-emerald-300' : 'text-xs font-bold';
+        }
+      });
+    }
+
+    function selectSkillSet(skill) {
+      document.getElementById('skill-set').value = skill;
+      document.querySelectorAll('.skill-btn').forEach((btn) => {
+        const s = btn.getAttribute('data-skill');
+        const active = s === skill;
+        const isMain = s === 'skill_set_5';
+        if (isMain) {
+          btn.className = active
+            ? 'skill-btn w-full text-left px-3 py-2 rounded-xl border transition bg-sky-500/15 border-sky-500 text-white shadow-sm'
+            : 'skill-btn w-full text-left px-3 py-2 rounded-xl border transition bg-slate-950/70 border-slate-800 hover:border-slate-700 text-slate-200';
+          const firstLine = btn.querySelector('div:first-child');
+          if (firstLine) {
+            firstLine.className = active
+              ? 'text-xs font-bold text-sky-300 flex items-center justify-between'
+              : 'text-xs font-bold flex items-center justify-between';
+          }
+        } else {
+          btn.className = active
+            ? 'skill-btn text-left p-2 rounded-xl border transition bg-sky-500/15 border-sky-500 text-white shadow-sm'
+            : 'skill-btn text-left p-2 rounded-xl border transition bg-slate-950/70 border-slate-800 hover:border-slate-700 text-slate-200';
+          const firstLine = btn.querySelector('div:first-child');
+          if (firstLine) {
+            firstLine.className = active ? 'text-[11px] font-bold text-sky-300' : 'text-[11px] font-bold';
+          }
         }
       });
     }
@@ -512,6 +597,7 @@
       document.getElementById('focus-instruction').value = '';
       document.getElementById('dup-alert').classList.add('hidden');
       selectOutputMode('normal_1_spin_1');
+      selectSkillSet('skill_set_5');
       selectedFiles = [];
       renderImagePreviews();
     }
@@ -551,6 +637,7 @@
       const rawText = document.getElementById('raw-text').value.trim();
       const focusInstruction = document.getElementById('focus-instruction').value.trim();
       const outputMode = document.getElementById('output-mode').value;
+      const skillSet = document.getElementById('skill-set').value || 'skill_set_5';
 
       if (!urlsInput && !rawText && selectedFiles.length === 0) {
         showToast('⚠️ กรุณาวางลิงก์, ข้อความ หรือแนบรูปภาพอย่างน้อย 1 อย่าง');
@@ -568,6 +655,7 @@
         fd.append('raw_text', rawText);
         fd.append('focus_instruction', focusInstruction);
         fd.append('output_mode', outputMode);
+        fd.append('skill_set', skillSet);
         selectedFiles.forEach((f) => fd.append('images', f));
 
         const res = await fetch('/api/submit', { method: 'POST', body: fd });
@@ -668,6 +756,7 @@
             j.employee_name,
             j.raw_text,
             j.focus_instruction,
+            getJobSkillSetTag(j),
             ...(j.urls || []),
             j.result?.headline,
             articlesText,
@@ -693,6 +782,7 @@
         const res = j.result || {};
         const shortTime = formatShortTime(j.created_at);
         const modeTag = MODE_LABELS[j.output_mode] || '📰 สรุปข่าว';
+        const skillSetTag = getJobSkillSetTag(j);
 
         // 1. Active / Queued Card
         if (!isDone && !isFailed) {
@@ -704,7 +794,8 @@
                   <span class="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
                   <span class="text-xs font-semibold text-amber-300">${escapeHtml(j.progress_text || 'กำลังประมวลผล...')} (${j.progress_pct || 10}%)</span>
                 </div>
-                <div class="flex items-center gap-2 text-xs text-slate-400">
+                <div class="flex flex-wrap items-center gap-1.5 text-xs text-slate-400">
+                  <span class="px-2 py-0.5 rounded-md bg-sky-500/15 border border-sky-500/30 text-[11px] font-semibold text-sky-300">${escapeHtml(skillSetTag)}</span>
                   <span class="px-2 py-0.5 rounded-md bg-slate-800 text-[11px] text-slate-300">${escapeHtml(modeTag)}</span>
                   <span class="text-emerald-300 font-medium">👤 ${escapeHtml(j.employee_name)}</span>
                   <span>• ${escapeHtml(shortTime)}</span>
@@ -730,6 +821,7 @@
             <div id="job-card-${j.id}" class="bg-slate-900 border border-red-500/40 rounded-2xl px-4 py-3.5 flex flex-wrap items-center justify-between gap-3">
               <div class="min-w-0 flex-1">
                 <div class="text-xs font-bold text-red-300">⚠️ ${escapeHtml(j.progress_text || res.raw_news || 'เกิดข้อผิดพลาดในการประมวลผล')}</div>
+                <div class="text-[11px] text-sky-300 mt-0.5">${escapeHtml(skillSetTag)}</div>
                 ${j.focus_instruction ? `<div class="text-[11px] text-slate-400 mt-0.5 truncate">💬 คำสั่ง: ${escapeHtml(j.focus_instruction)}</div>` : ''}
               </div>
               <div class="flex items-center gap-2 shrink-0">
@@ -756,9 +848,12 @@
             <div id="job-card-${j.id}" onclick="toggleExpandJob('${j.id}')"
               class="group bg-slate-900/85 hover:bg-slate-800/80 border border-slate-800/90 hover:border-slate-700 rounded-2xl px-4 py-3.5 cursor-pointer transition flex items-center justify-between gap-3">
               <div class="min-w-0 flex-1">
-                <div class="flex items-center gap-2 mb-0.5">
+                <div class="flex flex-wrap items-center gap-2 mb-0.5">
                   <span class="text-emerald-400 text-xs">●</span>
                   <h3 class="text-sm font-semibold text-slate-100 group-hover:text-white truncate">${escapeHtml(headline)}</h3>
+                  <span class="shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-500/15 text-sky-300 border border-sky-500/30">
+                    ${escapeHtml(skillSetTag)}
+                  </span>
                   ${articles.length > 1 ? `
                     <span class="shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold bg-violet-500/20 text-violet-300 border border-violet-500/30">
                       ${articles.length} ข่าว
@@ -803,9 +898,12 @@
           return `
             <div class="bg-slate-950/85 border border-slate-800 rounded-xl overflow-hidden">
               <div class="bg-slate-900/90 px-4 py-2.5 border-b border-slate-800/90 flex flex-wrap items-center justify-between gap-2">
-                <div class="flex items-center gap-2 min-w-0">
+                <div class="flex flex-wrap items-center gap-2 min-w-0">
                   <span class="px-2 py-0.5 rounded-md text-[11px] font-bold border ${badgeCls}">
                     ${escapeHtml(art.label)}
+                  </span>
+                  <span class="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-sky-500/15 text-sky-300 border border-sky-500/30">
+                    ${escapeHtml(skillSetTag)}
                   </span>
                   <span class="text-xs font-semibold text-slate-200 truncate">${escapeHtml(art.title)}</span>
                 </div>
@@ -850,6 +948,9 @@
                 <h3 class="text-sm sm:text-base font-bold text-white leading-snug">${escapeHtml(headline)}</h3>
               </div>
               <div class="flex flex-wrap items-center gap-1.5 shrink-0" onclick="event.stopPropagation()">
+                <span class="px-2 py-0.5 rounded-lg text-[11px] bg-sky-500/15 text-sky-300 border border-sky-500/30 font-semibold">
+                  ${escapeHtml(skillSetTag)}
+                </span>
                 <span class="px-2 py-0.5 rounded-lg text-[11px] bg-slate-900 text-emerald-300 border border-slate-700">
                   👤 ${escapeHtml(j.employee_name)} • ${escapeHtml(shortTime)}
                 </span>
@@ -882,10 +983,11 @@
 
             <!-- Expanded Body -->
             <div class="p-5 space-y-3.5">
-              ${(urlsHtml || j.focus_instruction) ? `
+              ${(urlsHtml || j.focus_instruction || skillSetTag) ? `
                 <div class="bg-slate-950/60 px-3.5 py-2.5 rounded-xl border border-slate-800/80 space-y-1.5">
                   ${urlsHtml}
                   <div class="flex flex-wrap items-center gap-2 text-xs">
+                    <span class="px-2 py-0.5 rounded bg-sky-500/15 border border-sky-500/30 text-sky-300 font-semibold text-[11px]">${escapeHtml(skillSetTag)}</span>
                     <span class="px-2 py-0.5 rounded bg-slate-800 text-slate-300 text-[11px]">${escapeHtml(modeTag)}</span>
                     ${j.focus_instruction ? `
                       <span class="text-violet-300 font-medium">💬 ความต้องการที่สั่ง: "${escapeHtml(j.focus_instruction)}"</span>
