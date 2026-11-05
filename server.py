@@ -95,20 +95,36 @@ def parse_chat_style_submission(
     if len(leftover) >= 3:
         merged_focus = f"{merged_focus}\n{leftover}".strip() if merged_focus else leftover
 
-    # Smart auto-detect mode if employee wrote explicit multi-angle instructions in chat style
+    # Smart auto-detect mode if employee wrote explicit instructions in chat style or focus box
     low_focus = merged_focus.lower()
-    if any(k in low_focus for k in ("1+2+1", "พี่ตูน", "เข้าใจจบในย่อหน้าแรก", "ฮุคจบในย่อหน้าแรก")):
+    if any(k in low_focus for k in ("1+2+1", "พี่ตูน", "เข้าใจจบในย่อหน้าแรก", "ฮุคจบในย่อหน้าแรก", "อินเนอร์ตัวละคร")):
         output_mode = "toon_121"
     elif "3 ย่อหน้า" in low_focus or "สามย่อหน้า" in low_focus or "254" in low_focus:
         output_mode = "viral_3_para"
+    elif any(k in low_focus for k in ("เฉพาะในคลิป", "แกะเฉพาะคลิป", "ไม่ค้นเว็บ")):
+        output_mode = "strict_clip_only"
     elif ("บิดประเด็น 2" in low_focus or "บิด 2" in low_focus or "บิดประเด็น2" in low_focus) and "ปกติ" in low_focus:
         output_mode = "normal_1_spin_2"
-    elif "ปกติ" in low_focus and "บิด" in low_focus and output_mode == "standard_4lock":
+    elif "ปกติ" in low_focus and "บิด" in low_focus:
         output_mode = "normal_1_spin_1"
+    elif any(k in low_focus for k in ("ทำข่าวปกติ", "มุมปกติอย่างเดียว", "เอาแค่ข่าวปกติ", "สรุปปกติอย่างเดียว")) and "บิด" not in low_focus:
+        output_mode = "standard_4lock"
+    elif any(k in low_focus for k in ("บิดอย่างเดียว", "บิดประเด็นล้วน", "เอาแค่มุมบิด")) and "ปกติ" not in low_focus:
+        output_mode = "spin_only_1"
 
-    # Always output all 6 styles per news story unless employee explicitly picked a single skill set
-    if any(k in low_focus for k in ("สกิลลูกเล่น", "ชุดสกิลที่ 6", "แบบที่ 6", "บิดแบบลูกเล่น")):
+    # Detect if employee requested a specific skill set (1..6) in the focus box
+    if any(k in low_focus for k in ("สกิลลูกเล่น", "ชุดสกิลที่ 6", "แบบที่ 6", "บิดแบบลูกเล่น", "ลูกเล่นประยุกต์")):
         skill_set = "skill_set_6"
+    elif any(k in low_focus for k in ("ชุดสกิลที่ 1", "แบบที่ 1")):
+        skill_set = "skill_set_1"
+    elif any(k in low_focus for k in ("ชุดสกิลที่ 2", "แบบที่ 2")):
+        skill_set = "skill_set_2"
+    elif any(k in low_focus for k in ("ชุดสกิลที่ 3", "แบบที่ 3")):
+        skill_set = "skill_set_3"
+    elif any(k in low_focus for k in ("ชุดสกิลที่ 4", "แบบที่ 4")):
+        skill_set = "skill_set_4"
+    elif any(k in low_focus for k in ("ชุดสกิลที่ 5", "แบบที่ 5")):
+        skill_set = "skill_set_5"
     elif not skill_set or skill_set == "all_5_styles":
         skill_set = "all_5_styles"
 
