@@ -274,20 +274,90 @@ def _clean_article_box_text(text: str) -> str:
     return "\n".join(cleaned_lines).strip()
 
 
+def _get_top_matched_254_prompts(query_text: str, top_k: int = 6) -> str:
+    """Fast in-process matcher against prompts_254.json to inject top DNA cards directly into SKILL_GUIDES.md."""
+    try:
+        p_path = Path(r"C:\Users\User\.gemini\config\skills\viral-prompt-library\prompts_254.json")
+        if not p_path.exists():
+            return ""
+        raw = json.loads(p_path.read_text(encoding="utf-8"))
+        items = raw.get("prompts") if isinstance(raw, dict) and "prompts" in raw else (list(raw.values()) if isinstance(raw, dict) else raw)
+        if not isinstance(items, list):
+            return ""
+
+        tokens = [w for w in re.split(r"[\s,./!?:;\"'()\[\]\-]+", (query_text or "").lower()) if len(w) >= 2]
+        scored = []
+        for card_num, p in enumerate(items, 1):
+            if not isinstance(p, dict):
+                continue
+            blob = " ".join(
+                str(p.get(k) or "")
+                for k in ("promptName", "category", "emotionalType", "hookStyle", "structure", "ctaStyle", "promptText")
+            ).lower()
+            score = float(p.get("viralScore") or 80) * 0.15
+            for tk in tokens[:40]:
+                if tk in (p.get("promptName") or "").lower():
+                    score += 12.0
+                elif tk in blob:
+                    score += 3.5
+            scored.append((score, card_num, p))
+
+        scored.sort(key=lambda x: x[0], reverse=True)
+        out_lines = ["=== 🧬 การ์ด DNA แนะนำจากคลัง 254 Prompts (คัดกรองตรงเนื้อหาข่าวนี้โดยอัตโนมัติ) ==="]
+        for idx, (_, card_num, card) in enumerate(scored[:top_k], 1):
+            cid = card.get("id", "")
+            cname = card.get("promptName", "")
+            cat = card.get("category", "")
+            hook = str(card.get("hookStyle") or "")[:180]
+            struct = str(card.get("structure") or "")[:240]
+            cta = str(card.get("ctaStyle") or "")[:160]
+            ex_hooks = card.get("exampleHooks") or []
+            ex_str = (" | ".join(str(x) for x in ex_hooks[:2]) if isinstance(ex_hooks, list) else str(ex_hooks))[:220]
+            out_lines.append(
+                f"{idx}. **การ์ด #{card_num} [{cid}] {cname}** (หมวด: {cat})\n"
+                f"   - ท่าเปิด (Hook Style): {hook}\n"
+                f"   - โครงสร้าง (Structure): {struct}\n"
+                f"   - ท่าปิด (Closing Style): {cta}\n"
+                f"   - ตัวอย่างขึ้นต้น: {ex_str}"
+            )
+        return "\n".join(out_lines)
+    except Exception:
+        return ""
+
+
 SKILL_SET_REGISTRY: Dict[str, Dict[str, str]] = {
     "all_5_styles": {
         "id": "all_5_styles",
-        "short_tag": "🔥 ครบทั้ง 6 แบบ (พนักงานเลือกเอง)",
-        "full_badge": "[ครบทั้ง 6 ชุดสกิล: อัดข้อมูลไวรัลแน่น 115–175 คำ + สกิลลูกเล่นประยุกต์ข้อมูล — พนักงานกดเลือกแบบที่ชอบได้เอง]",
-        "skill_path": r"C:\Users\User\.gemini\config\skills\news-skill-set-5-ultimate-3d-hybrid\SKILL.md",
+        "short_tag": "🔥 ครบทั้ง 2 แนวหลัก (กระชับ 1+2+1 254 DNA + สกิลลูกเล่น 1+3+1)",
+        "full_badge": "[มาตรฐาน 2 แนวหลัก 98/100: (1) โหมดกระชับ 1+2+1 จับคู่ 254 DNA + (2) สกิลลูกเล่นประยุกต์ข้อมูล 1+3+1]",
+        "skill_path": r"C:\Users\User\.gemini\config\skills\news-skill-set-6-applied-hook\SKILL.md",
         "method_instruction": (
-            "สร้างเนื้อข่าวออกเป็น **6 แบบ (ครบทั้ง 6 ชุดสกิล)** ในข่าวเดียว เพื่อให้พนักงานเลือกหยิบไปใช้เอง โดยแต่ละแบบมีครบทั้ง `มุมปกติ` และ `มุมบิดประเด็น` (รวม 12 กล่องในอาร์เรย์ `articles`):\n"
-            "    - แบบที่ 1 (`skill_set_1` — 1+3+1 อัดดีเทลตัวเลข-เหตุการณ์จริงครบทุกจุด ตัดคำโวหารทิ้ง 100% ~165-175 คำ)\n"
-            "    - แบบที่ 2 (`skill_set_2` — 1+3+1 เปิดด้วยคำพูด/ฉากจำจริง + ไล่สเต็ปแก้ปัญหาด้วยข้อมูลล้วน ~165-175 คำ)\n"
-            "    - แบบที่ 3 (`skill_set_3` — 1+4+1 ซอยช่วงกลาง 4 บรรทัดสั้นกระชับ เก็บข้อมูลลึกครบ 6 จุด ~165-175 คำ)\n"
-            "    - แบบที่ 4 (`skill_set_4` — 1+2+1 หมัดหนักคู่เทียบตัวเลขก่อน-หลัง 4 บรรทัดจบ ~125-145 คำ)\n"
-            "    - แบบที่ 5 (`skill_set_5` — 1+3+1 ไฮบริดเล่าลื่น ข้อมูลไวรัลแน่นสุดซอย 100/100 ⭐ ~165-175 คำ)\n"
-            "    - แบบที่ 6 (`skill_set_6` — 1+3+1 💡 สกิลลูกเล่นประยุกต์ข้อมูล เปลี่ยนข้อมูลลึกเป็นลูกเล่นการเล่า ~145-165 คำ)"
+            "สร้างเนื้อข่าวออกเป็น **2 แนวหลักที่ต่างโครงสร้างกันชัดเจน 100%** (รวม **4 กล่อง** ในอาร์เรย์ `articles` สำหรับโหมดปกติ+บิด) เพื่อให้ AI ทุ่มสมาธิขัดเกลาทุกกล่องซ้ำหลายรอบจนได้ความคมระดับ **97–98/100**:\n"
+            "    - **แนวที่ 1 (`style_id: 'toon_dna_121'`) — ⭐ โหมดกระชับ 1+2+1 ฮุคจบในย่อหน้าแรก + ปิดอินเนอร์ตัวละคร (จับคู่ 254 DNA Prompts • 98/100):** โครงสร้าง 4 ย่อหน้าสั้น (`1+2+1`) ย่อหน้าแรกผสานท่าเปิดของการ์ด 254 DNA เข้ากับสรุปใจความสำคัญให้เข้าใจจบทั้งเรื่องทันที + ขยายที่มาและดีเทล 2 ย่อหน้า (ยึดกฎ `Single-Core Purity` 1 ข่าว = 1 แกนอารมณ์บริสุทธิ์ ห้ามเอาเรื่องคนละโทนมายำปนกัน) + ย่อหน้าสุดท้ายขมวดจบใส่อินเนอร์ความรู้สึกของตัวละคร\n"
+            "    - **แนวที่ 2 (`style_id: 'applied_hybrid_131'`) — 💡 สกิลลูกเล่นประยุกต์ข้อมูล + ไฮบริดแตกบรรทัด (1+3+1 • 98/100):** โครงสร้างแตกบรรทัด 3 บล็อก (`1 บรรทัดเปิดเรื่องคมๆ` + `3 บรรทัดกลางเจาะลึก` + `1 บรรทัดขมวดจบตามธรรมชาติ`) ที่เปลี่ยนข้อมูลรีเสิร์ชลึกเป็นลูกเล่นการเล่า (หักมุมตัวเลข / แกะรอยจากของ 1 ชิ้น / ถอดรหัสคำพูดสั้นๆ / ตัดสลับ 2 โลก / กฎเหล็กจากแผลในอดีต)"
+        ),
+    },
+    "toon_dna_121": {
+        "id": "toon_dna_121",
+        "short_tag": "⭐ แนวที่ 1: กระชับ 1+2+1 (จับคู่ 254 DNA • 98/100)",
+        "full_badge": "[แนวที่ 1: โหมดกระชับ 1+2+1 (โมเดลพี่ตูน 1,600M + จับคู่คลัง 254 DNA Prompts + Single-Core Purity • 98/100)]",
+        "skill_path": r"C:\Users\User\.gemini\config\skills\viral-news-digest\SKILL.md",
+        "method_instruction": (
+            "ใช้เฉพาะหลักการของ **[แนวที่ 1: โหมดกระชับ 1+2+1 มาตรฐาน 97–98/100 (โมเดลพี่ตูน 1,600M + จับคู่คลัง 254 DNA Prompts + Single-Core Purity)]**:\n"
+            "    - ย่อหน้าที่ 1 (2-3 บรรทัด): ผสานท่าเปิดของการ์ดจากคลัง 254 DNA Prompts เข้ากับ `[จุดเริ่มต้น/เหตุผลสำคัญ] + [ใคร] + [การกระทำ/ตัวเลขผลลัพธ์จริง]` เพื่อให้คนอ่านเข้าใจจบทั้งเรื่องในย่อหน้าแรกทันที\n"
+            "    - ย่อหน้าที่ 2-3 (ย่อหน้าละ 2-3 บรรทัด): ขยายที่มา จุดเริ่มต้น และดีเทลการลงมือทำจริง โดยยึดกฎ `Single-Core Purity` (ห้ามเอาเรื่องคนละอารมณ์มาปนในข่าวเดียวเด็ดขาด)\n"
+            "    - ย่อหน้าที่ 4 (2 บรรทัด): ขมวดจบให้สอดคล้องกับบทเรื่องและใส่อินเนอร์ความรู้สึกของตัวละครให้กินใจ พร้อมระบุ `[prompt_xxxx • 98/100]` ใน `title`"
+        ),
+    },
+    "applied_hybrid_131": {
+        "id": "applied_hybrid_131",
+        "short_tag": "💡 แนวที่ 2: สกิลลูกเล่น + ไฮบริดแตกบรรทัด (1+3+1)",
+        "full_badge": "[แนวที่ 2: สกิลลูกเล่นประยุกต์ข้อมูล + ไฮบริดแตกบรรทัด (1+3+1 💡⭐ • รีเสิร์ชลึกแต่เล่าด้วยลูกเล่น • 98/100)]",
+        "skill_path": r"C:\Users\User\.gemini\config\skills\news-skill-set-6-applied-hook\SKILL.md",
+        "method_instruction": (
+            "ใช้เฉพาะหลักการของ **[แนวที่ 2: สกิลลูกเล่นประยุกต์ข้อมูล + ไฮบริดแตกบรรทัด (1+3+1 💡⭐)]** (ความยาวรวม 145-175 คำ บรรทัดละ ~120-185 ตัวอักษร):\n"
+            "    - เปลี่ยนข้อมูลรีเสิร์ชเชิงลึกให้เป็น 'ลูกเล่นของประเด็น (Applied Narrative Hook)' ห้ามยกข้อมูลมาเรียงต่อกันทื่อๆ แบบรายงาน\n"
+            "    - เลือก 1 ลูกเล่นที่เข้ากับข่าวที่สุด (ลูกเล่นที่ 1: หักมุมตัวเลขคู่เทียบ / ลูกเล่นที่ 2: แกะรอยจากของ 1 ชิ้น / ลูกเล่นที่ 3: ถอดรหัสคำพูดสั้นๆ / ลูกเล่นที่ 4: ภาพตัดสลับ 2 โลก / ลูกเล่นที่ 5: กฎเหล็กจากแผลในอดีต) ร้อยเรียงในโครงสร้างแตกบรรทัด 1+3+1"
         ),
     },
     "skill_set_1": {
@@ -361,7 +431,21 @@ SKILL_SET_REGISTRY: Dict[str, Dict[str, str]] = {
 }
 
 
+VALID_STYLE_IDS = (
+    "toon_dna_121",
+    "applied_hybrid_131",
+    "skill_set_1",
+    "skill_set_2",
+    "skill_set_3",
+    "skill_set_4",
+    "skill_set_5",
+    "skill_set_6",
+)
+
+
 def get_skill_set_info(skill_set: str) -> Dict[str, str]:
+    if skill_set == "dual_core_styles":
+        return SKILL_SET_REGISTRY["all_5_styles"]
     return SKILL_SET_REGISTRY.get(skill_set) or SKILL_SET_REGISTRY["all_5_styles"]
 
 
@@ -384,23 +468,30 @@ def _normalize_result_articles(result_data: Dict[str, Any], output_mode: str, sk
                 if not content:
                     continue
                 item_skill_id = str(item.get("style_id") or item.get("skill_set") or "").strip()
-                if item_skill_id not in ("skill_set_1", "skill_set_2", "skill_set_3", "skill_set_4", "skill_set_5", "skill_set_6"):
+                if item_skill_id not in VALID_STYLE_IDS:
                     title_check = str(item.get("title") or item.get("label") or "")
-                    for snum in ("1", "2", "3", "4", "5", "6"):
-                        if f"แบบที่ {snum}" in title_check or f"ชุดสกิลที่ {snum}" in title_check:
-                            item_skill_id = f"skill_set_{snum}"
-                            break
+                    if any(k in title_check for k in ("1+2+1", "แนวที่ 1", "พี่ตูน", "254")):
+                        item_skill_id = "toon_dna_121"
+                    elif any(k in title_check for k in ("แนวที่ 2", "ลูกเล่น", "1+3+1")):
+                        item_skill_id = "applied_hybrid_131"
+                    else:
+                        for snum in ("1", "2", "3", "4", "5", "6"):
+                            if f"แบบที่ {snum}" in title_check or f"ชุดสกิลที่ {snum}" in title_check:
+                                item_skill_id = f"skill_set_{snum}"
+                                break
                     if not item_skill_id:
-                        if s_info["id"] in ("skill_set_1", "skill_set_2", "skill_set_3", "skill_set_4", "skill_set_5", "skill_set_6"):
+                        if s_info["id"] in VALID_STYLE_IDS:
                             item_skill_id = s_info["id"]
+                        elif len(raw_articles) == 4:
+                            item_skill_id = "toon_dna_121" if idx < 2 else "applied_hybrid_131"
+                        elif len(raw_articles) == 2 and output_mode in ("standard_4lock", "spin_only_1", "strict_clip_only"):
+                            item_skill_id = "toon_dna_121" if idx == 0 else "applied_hybrid_131"
+                        elif len(raw_articles) >= 10:
+                            item_skill_id = f"skill_set_{min(6, (idx // 2) + 1)}"
+                        elif len(raw_articles) in (5, 6):
+                            item_skill_id = f"skill_set_{idx + 1}"
                         else:
-                            # Infer from index when 10-12 boxes are returned (2 per style) or 5-6 boxes (1 per style)
-                            if len(raw_articles) >= 10:
-                                item_skill_id = f"skill_set_{min(6, (idx // 2) + 1)}"
-                            elif len(raw_articles) in (5, 6):
-                                item_skill_id = f"skill_set_{idx + 1}"
-                            else:
-                                item_skill_id = "skill_set_5"
+                            item_skill_id = "toon_dna_121" if output_mode == "toon_121" else "applied_hybrid_131"
 
                 item_sinfo = get_skill_set_info(item_skill_id)
                 label = str(item.get("label") or item.get("mode_badge") or "").strip()
@@ -413,7 +504,7 @@ def _normalize_result_articles(result_data: Dict[str, Any], output_mode: str, sk
                         label = f"{item_sinfo['short_tag']} • มุมบิดประเด็น"
                         angle_type = "spin"
                     elif output_mode == "toon_121":
-                        label = f"{item_sinfo['short_tag']} • โหมด 1+2+1 (พี่ตูน 1,600M)"
+                        label = f"{item_sinfo['short_tag']} • โหมด 1+2+1 (98/100)"
                     elif output_mode == "viral_3_para":
                         label = f"{item_sinfo['short_tag']} • ข่าวสั้น 3 ย่อหน้า (254 DNA)"
                     elif output_mode == "strict_clip_only":
@@ -427,6 +518,7 @@ def _normalize_result_articles(result_data: Dict[str, Any], output_mode: str, sk
                     "title": title,
                     "style_id": item_sinfo["id"],
                     "angle_type": angle_type,
+                    "style_meta": str(item.get("style_meta") or "").strip(),
                     "skill_set": item_sinfo["id"],
                     "skill_set_short": item_sinfo["short_tag"],
                     "skill_set_label": item_sinfo["full_badge"],
@@ -439,7 +531,7 @@ def _normalize_result_articles(result_data: Dict[str, Any], output_mode: str, sk
         for v in raw_variants:
             if not isinstance(v, dict):
                 continue
-            sid = str(v.get("style_id") or "skill_set_5")
+            sid = str(v.get("style_id") or "toon_dna_121")
             v_info = get_skill_set_info(sid)
             n_txt = _clean_article_box_text(v.get("normal_content") or "")
             s_txt = _clean_article_box_text(v.get("spin_content") or "")
@@ -479,7 +571,7 @@ def _normalize_result_articles(result_data: Dict[str, Any], output_mode: str, sk
         normalized.append({
             "label": default_label,
             "title": result_data.get("headline") or f"1. ข่าวแบบ{default_label}",
-            "style_id": "skill_set_5",
+            "style_id": "toon_dna_121" if output_mode == "toon_121" else "applied_hybrid_131",
             "angle_type": "spin" if output_mode == "spin_only_1" else "normal",
             "skill_set": s_info["id"],
             "skill_set_short": short_tag,
@@ -487,10 +579,9 @@ def _normalize_result_articles(result_data: Dict[str, Any], output_mode: str, sk
             "content": cleaned_raw,
         })
 
-    # Build structured style_variants (1..6) for instant 6-Style Tab switching on the Web UI
+    # Build structured style_variants for instant Tab switching on the Web UI
     style_variants: List[Dict[str, Any]] = []
-    for snum in range(1, 7):
-        sid = f"skill_set_{snum}"
+    for s_idx, sid in enumerate(VALID_STYLE_IDS, 1):
         st_info = get_skill_set_info(sid)
         matching = [a for a in normalized if a.get("style_id") == sid]
         if matching:
@@ -498,7 +589,7 @@ def _normalize_result_articles(result_data: Dict[str, Any], output_mode: str, sk
             spins = [a for a in matching if a.get("angle_type") == "spin"]
             style_variants.append({
                 "style_id": sid,
-                "style_no": snum,
+                "style_no": s_idx,
                 "style_short": st_info["short_tag"],
                 "style_badge": st_info["full_badge"],
                 "normal_title": normals[0]["title"] if normals else f"{st_info['short_tag']} — มุมปกติ",
@@ -760,22 +851,36 @@ async def process_job(
 
     progress_cb(f"AI กำลังรัน {s_info['short_tag']} (ค้นข้อมูล & เขียนข่าว)...", 65)
 
-    # Load Skill Guides into SKILL_GUIDES.md (kept compact < 40KB so agy.exe reads it in 1 single read_file call without truncation)
+    # Load Skill Guides into SKILL_GUIDES.md (kept compact < 35KB so agy.exe reads it in 1 single read_file call without truncation)
     writer_skill_path = Path(r"C:\Users\User\.gemini\config\skills\viral-news-writer\SKILL.md")
     digest_skill_path = Path(r"C:\Users\User\.gemini\config\skills\viral-news-digest\SKILL.md")
     spin_skill_path = Path(r"C:\Users\User\.gemini\config\skills\viral-news-spin\SKILL.md")
     prompt_lib_path = Path(r"C:\Users\User\.gemini\config\skills\viral-prompt-library\SKILL.md")
     guides_parts: List[str] = []
 
+    # Pre-match Top 6 DNA Prompt Cards from 254 Library using job context + focus_instruction
+    match_blob_parts = [raw_text or "", focus_instruction or ""]
+    for v_item in extracted_meta.get("videos", []):
+        match_blob_parts.append(str(v_item.get("title") or ""))
+        match_blob_parts.append(str(v_item.get("description") or "")[:600])
+    for a_item in extracted_meta.get("articles", []):
+        match_blob_parts.append(str(a_item.get("title") or ""))
+        match_blob_parts.append(str(a_item.get("description") or "")[:600])
+        match_blob_parts.append(str(a_item.get("body_text") or "")[:800])
+    matched_dna_section = _get_top_matched_254_prompts(" ".join(match_blob_parts), top_k=6)
+    if matched_dna_section:
+        guides_parts.append(matched_dna_section)
+
     if s_info["id"] == "all_5_styles":
-        summary_lines = ["=== สรุปโครงสร้างทั้ง 6 ชุดสกิล (ใช้ข้อเท็จจริงชุดเดียวกัน จัด 6 โครงสร้าง) ==="]
-        for snum in range(1, 7):
-            sub_info = SKILL_SET_REGISTRY[f"skill_set_{snum}"]
-            summary_lines.append(f"\n### {sub_info['full_badge']}\n{sub_info['method_instruction']}")
+        summary_lines = [
+            "=== คู่มือ 2 แนวหลัก มาตรฐาน 97–98/100 (ใช้ข้อเท็จจริงชุดเดียวกัน จัด 2 โครงสร้างที่ต่างกันชัดเจน) ===",
+            f"\n### 1. {SKILL_SET_REGISTRY['toon_dna_121']['full_badge']}\n{SKILL_SET_REGISTRY['toon_dna_121']['method_instruction']}",
+            f"\n### 2. {SKILL_SET_REGISTRY['applied_hybrid_131']['full_badge']}\n{SKILL_SET_REGISTRY['applied_hybrid_131']['method_instruction']}",
+        ]
         guides_parts.append("\n".join(summary_lines))
         sp6 = Path(SKILL_SET_REGISTRY["skill_set_6"]["skill_path"])
         if sp6.exists():
-            guides_parts.append("=== คู่มือละเอียด ชุดสกิลที่ 6 (สกิลลูกเล่นประยุกต์ข้อมูล) ===\n" + sp6.read_text(encoding="utf-8")[:6500])
+            guides_parts.append("=== คู่มือละเอียด แนวที่ 2: สกิลลูกเล่นประยุกต์ข้อมูล (1+3+1) ===\n" + sp6.read_text(encoding="utf-8")[:6500])
     else:
         selected_skill_path = Path(s_info["skill_path"])
         if selected_skill_path.exists():
@@ -786,10 +891,10 @@ async def process_job(
 
     if digest_skill_path.exists():
         digest_txt = digest_skill_path.read_text(encoding="utf-8")
-        guides_parts.append("=== คู่มือสกิล `viral-news-digest` (รวมโหมดกระชับ 1+2+1 โมเดลพี่ตูน 1,600M & มาตรฐาน 97-98/100) ===\n" + digest_txt[:15000])
+        guides_parts.append("=== คู่มือสกิล `viral-news-digest` (รวมโหมดกระชับ 1+2+1 โมเดลพี่ตูน 1,600M & มาตรฐาน 97-98/100) ===\n" + digest_txt[:14000])
     if spin_skill_path.exists():
         spin_txt = spin_skill_path.read_text(encoding="utf-8")
-        guides_parts.append("=== คู่มือสกิล `viral-news-spin` (รวมสูตรที่ 9 ขุดความดีเงียบๆ สวนกระแสดราม่า) ===\n" + spin_txt[:11000])
+        guides_parts.append("=== คู่มือสกิล `viral-news-spin` (รวมสูตรที่ 9 ขุดความดีเงียบๆ สวนกระแสดราม่า) ===\n" + spin_txt[:10000])
     if output_mode == "viral_3_para":
         if writer_skill_path.exists():
             guides_parts.append("=== คู่มือสกิล `viral-news-writer` ===\n" + writer_skill_path.read_text(encoding="utf-8")[:6000])
@@ -818,13 +923,13 @@ async def process_job(
         "  • 🛡️ กฎเหล็กความแม่นยำสูงสุด (Strict Fact-Only & Zero Hallucination 100% — ห้ามมั่วหรือเติมแต่งข้อมูลเด็ดขาด):\n"
         "    - **ทำจากข้อมูลจริงที่มีหลักฐานรองรับ 100% เท่านั้น:** ทุกชื่อบุคคล ตัวเลขเงิน จำนวนปี สถานที่ และคำพูด ต้องมีที่มาจากคลิป/ภาพ/ข้อความต้นทาง หรือผลลัพธ์ `search_web` ที่ยืนยันตรงเคสจริงเท่านั้น ห้ามเดา ห้ามกะประมาณตัวเลขเอง และห้ามจำสลับกับบทละคร/ซิตคอมเด็ดขาด!\n"
         "    - **กฎเหล็ก Single-Core Purity (1 ข่าว = 1 แกนอารมณ์บริสุทธิ์ ห้ามยัดข้อมูลหลุดโทนมาปนในข่าวเดียว):** ห้ามเอา 2 ประเด็นคนละอารมณ์ของคนเดียวกันมายำปนในกล่องข่าวเดียวกันเด็ดขาด (เช่น ห้ามเอาเรื่องเปิดร้านอาหารมาปนกับเรื่องวิ่งหาเงินซื้อเครื่องช่วยหายใจให้ห้องไอซียู หรือห้ามเอาเรื่องธุรกิจรีสอร์ทมาปนกับเรื่องเด็กวัดสู้ชีวิตตามคำสอนพ่อ) ต้องล็อกแกนเรื่องเดียวที่คมที่สุดร้อยตั้งแต่ต้นจนจบให้เป็นเนื้อเดียวกัน 100%\n"
-        "    - **หลักการ 6 แบบ (Same Verified Facts, 6 Structural Styles):** ทั้ง 6 แบบสกิล (`skill_set_1` ถึง `skill_set_6`) คือการนำ **ข้อเท็จจริงจริงชุดเดียวกันที่ตรวจสอบแล้ว** มาจัดโครงสร้างการเล่า 6 สไตล์ (เรียงไทม์ไลน์ / เปิดด้วยคำพูดจริง / ซอย 4 บรรทัดสั้น / เทียบตัวเลข 4 บรรทัดจบ / ไฮบริดเล่าลื่น / สกิลลูกเล่นประยุกต์ข้อมูล) ห้ามแต่งข้อมูลใหม่เพิ่มเพื่อให้ครบ 6 แบบเด็ดขาด!\n"
-        "    - **กรณีข่าวมีข้อมูลน้อย / คลิปสั้น (Fact-Bounded Length Adaptation — มีแค่ไหนทำแค่นั้น):** มิติข้อมูลทั้ง 6 จุด (สถานที่, วิธีเอาตัวรอด, ตัวเลขเงิน, จุดเปลี่ยน, ทรัพย์สินปัจจุบัน, เหตุผลเพื่อครอบครัว) ให้ใส่ **เฉพาะจุดที่มีข้อมูลจริงปรากฏในต้นทางหรือค้นเจอจากแหล่งข่าวที่เชื่อถือได้เท่านั้น** หากข่าวนั้นไม่มีข้อมูลบางจุด (เช่น ไม่ได้ระบุอำเภอ ไม่ได้ระบุจำนวนเงิน หรือเป็นข่าวเหตุการณ์สั้นๆ) **ให้ตัดจุดที่ไม่มีข้อมูลออกและปรับลดจำนวนบรรทัด/ความยาวคำลงตามข้อเท็จจริงที่มีอยู่จริงทันที (เช่น เหลือ 70–120 คำ หรือ 3–4 บรรทัด)** ห้ามปั้นน้ำหรือเขียนขยายความลอยๆ เพื่อให้ครบโควตาคำเด็ดขาด!\n"
+        "    - **หลักการ 2 แนวหลัก (Same Verified Facts, 2 Distinct Master Styles):** ทั้ง 2 แนวหลัก (`toon_dna_121` และ `applied_hybrid_131`) คือการนำ **ข้อเท็จจริงจริงชุดเดียวกันที่ตรวจสอบแล้ว** มาขัดเกลาซ้ำหลายรอบใน 2 โครงสร้างที่ต่างกันชัดเจน (แนวที่ 1: โหมดกระชับ 1+2+1 จับคู่ 254 DNA ฮุคจบย่อหน้าแรก+ปิดอินเนอร์ / แนวที่ 2: สกิลลูกเล่นประยุกต์ข้อมูล + ไฮบริดแตกบรรทัด 1+3+1) จนได้ความคมระดับ `97–98/100` ทุกกล่อง!\n"
+        "    - **กรณีข่าวมีข้อมูลน้อย / คลิปสั้น (Fact-Bounded Length Adaptation — มีแค่ไหนทำแค่นั้น):** ให้ใส่ **เฉพาะจุดที่มีข้อมูลจริงปรากฏในต้นทางหรือค้นเจอจากแหล่งข่าวที่เชื่อถือได้เท่านั้น** หากข่าวนั้นไม่มีข้อมูลบางจุด **ให้ตัดจุดที่ไม่มีข้อมูลออกและปรับลดจำนวนบรรทัด/ความยาวคำลงตามข้อเท็จจริงที่มีอยู่จริงทันที** ห้ามปั้นน้ำหรือเขียนขยายความลอยๆ เด็ดขาด!\n"
         "    - **กรณีข้อมูลไม่พอทำมุมบิดประเด็นห้องใหม่ (Fallback for Low-Context Clips):** หากค้น `search_web` เต็มที่แล้วเป็นคลิปชาวบ้าน/CCTV/เหตุการณ์เดี่ยวที่ไม่มีข้อมูลภูมิหลังหรือเรื่องราวอีกห้องหนึ่งบนเว็บเลย ห้ามมโนประวัติชีวิตเองเด็ดขาด! ให้ใช้มุมบิดประเด็นเป็นการ **เจาะดีเทลจุดสังเกตจริงในคลิป/คำพูดจริงอีกแง่มุมหนึ่ง หรือข้อกฎหมาย/ข้อเท็จจริงมาตรฐานที่ตรวจสอบได้จริง** เท่าที่มีหลักฐานรองรับเท่านั้น\n"
         "    - **สูตรที่ 9 สำหรับบิดข่าวน้ำดี/ขุดความดีเงียบๆ สวนกระแสดราม่า (`Positive Counter-Current & Side-Character Good Deed Spin`):** หากเป็นข่าวคนดังหรือตัวละครในข่าวใหญ่ สามารถค้นขุด 'ความดีเงียบๆ ที่คนยังไม่ค่อยรู้' (เช่น สู้ชีวิตจากศูนย์, ความกตัญญูดูแลพ่อแม่ป่วยติดเตียงด้วยตัวเอง, รวยร้อยล้านแต่ติดดิน, จิตอาสาช่วยเหลือสังคมเงียบๆ) มาบิดประเด็นมุมบวกกินใจได้\n"
         "  • 🏆 มาตรฐานการขัดเกลา 97–98/100 (`97–98/100 Multi-Round Polish Standard` + `254-Prompt DNA Matching`):\n"
         "    - **คัดกรองโทนบวกอบอุ่นใจไร้ดราม่าสำหรับข่าวน้ำดี (`Positive Feel-Good Filter`):** เมื่อทำข่าวน้ำดี/ความกตัญญู/สู้ชีวิต ให้เกลาคำหนักๆ หรือคำดราม่า ('คำดูถูก', 'คำครหา', 'วินาทีเฉียดตาย', 'ถอดหัวโขน') ออกให้เป็นโทนบวกอบอุ่นใจ\n"
-        "    - **จับคู่คลัง 254 DNA Prompts (`Mandatory 254-Prompt DNA Matching`):** ห้ามขึ้นต้นเป็นแพตเทิร์นเดียวกันซ้ำๆ (`[ชื่อ] [อาชีพ] ทำ...`) ให้ประเมินเนื้อหาจับคู่กับการ์ดในคลัง `viral-prompt-library` (254 แนว) ผสานท่าเปิดเฉพาะตัวของการ์ดเข้ากับ `[จุดเริ่มต้น/เหตุผลสำคัญ] + [ใคร] + [การกระทำ/ตัวเลขผลลัพธ์จริง]` และขัดเกลาซ้ำหลายรอบจนได้ระดับ `97–98/100` พร้อมระบุรหัสการ์ดและคะแนนคุณภาพ (เช่น `[Prompt #XX • 98/100]`) ไว้ใน `audit_tag` และ `context_connected`\n"
+        "    - **จับคู่คลัง 254 DNA Prompts (`Mandatory 254-Prompt DNA Matching`):** ห้ามขึ้นต้นเป็นแพตเทิร์นเดียวกันซ้ำๆ (`[ชื่อ] [อาชีพ] ทำ...`) ให้เลือกการ์ดที่ตรงเนื้อหาที่สุดจากหมวด `🧬 การ์ด DNA แนะนำจากคลัง 254 Prompts` ใน `SKILL_GUIDES.md` ผสานท่าเปิดเฉพาะตัวของการ์ดเข้ากับ `[จุดเริ่มต้น/เหตุผลสำคัญ] + [ใคร] + [การกระทำ/ตัวเลขผลลัพธ์จริง]` และขัดเกลาซ้ำหลายรอบจนได้ระดับ `97–98/100` พร้อมระบุรหัสการ์ดและคะแนนคุณภาพ (เช่น `[prompt_xxxx • 98/100]`) ไว้ใน `title`, `audit_tag`, และ `context_connected`\n"
         "    - ตัดคำโวหารและสำนวนเปรียบเปรยออก 100% (ห้ามเขียน 'ซ่อนความทรงจำไว้ทุกดวง', 'คือมื้อประทังชีวิต', 'เติมเต็มความฝัน') ใช้โควตาคำไปกับข้อเท็จจริงที่มีหลักฐานจริงเท่านั้น\n"
         "    - แบนคำแม่พิมพ์นักวิเคราะห์ซ้ำซาก 100%: ห้ามเปิดเรื่องด้วย 'เบื้องหลัง...', 'เหตุผลที่... มีที่มาจาก...', 'เส้นทางพลิกผันของ...', 'ท่ามกลางกระแส...' ห้ามขึ้นกลางเรื่องด้วย 'หากย้อนกลับไป...', 'จุดเริ่มต้นมาจาก...', 'เหตุการณ์นี้เริ่มต้นขึ้นเมื่อ...', 'ในทางธุรกิจ...' และห้ามจบเทศนาสั่งสอน ('จึงสะท้อนชัดเจนว่า...', 'สิ่งนี้สะท้อน...', 'จึงเป็นบทเรียนชีวิตจริงว่า...', 'จึงเป็นเครื่องพิสูจน์ว่า...', 'นี่แหละ...', 'จาก... กลายเป็น...')\n"
         "    - กฎแยกห้องข้อมูล (`Strict Room Separation`): เมื่อมีข้อมูลชั้นที่ 2 จาก `search_web` เพียงพอ ให้แยกเรื่องราวระหว่าง `มุมปกติ (Room 1)` กับ `มุมบิดประเด็น (Room 2)` ไม่ให้ซ้ำฉากกัน\n"
@@ -840,52 +945,56 @@ async def process_job(
             "    - **ย่อหน้าที่ 2 (ที่มา / จุดเริ่มต้น / จุดสู้ชีวิต — 2-3 บรรทัด):** ขยายที่มาในอดีตหรือจุดเริ่มต้นที่ทำให้เกิดเรื่องนี้แบบกระชับ ตัดน้ำออก 100% และยึดกฎ `Single-Core Purity` (ห้ามเอาเรื่องอื่นคนละอารมณ์มาปนในข่าวเดียวเด็ดขาด)\n"
             "    - **ย่อหน้าที่ 3 (ดีเทลการลงมือทำจริง / ผลลัพธ์ — 2-3 บรรทัด):** ขยายดีเทลการกระทำจริง สถานที่ หรือสิ่งที่มอบให้ครอบครัว/สังคม\n"
             "    - **ย่อหน้าที่ 4 (ท่อนปิดท้ายอินเนอร์ตัวละคร — 2 บรรทัด):** ขมวดจบให้สอดคล้องกับบทเรื่องและตัวละคร หรือใส่อินเนอร์ความรู้สึกของตัวละครลงไป (`เพราะสำหรับเขาแล้ว...`, `เพราะในวัยเด็กเขาเคย...`) ให้จบสวยและกินใจกว่ารายงานข่าวแห้งๆ (ห้ามจบด้วยคำแม่พิมพ์ 'จึงสะท้อนชัดเจนว่า...')\n"
-            "  • ให้สร้างอาร์เรย์ `articles` จำนวน **2 กล่อง** (`มุมปกติ 1+2+1` และ `มุมบิดประเด็น 1+2+1` ตามสูตรที่ 9 หรือมุมบิดข้อมูลจริงชั้นที่ 2) พร้อมระบุรหัสการ์ด Prompt ที่ใช้ + คะแนนคุณภาพ `98/100` ไว้ใน `title`, `context_connected`, และ `audit_tag`\n"
+            "  • ให้สร้างอาร์เรย์ `articles` จำนวน **2 กล่อง** (`style_id: 'toon_dna_121'`, `angle_type: 'normal'` และ `angle_type: 'spin'` ตามสูตรที่ 9 หรือมุมบิดข้อมูลจริงชั้นที่ 2) พร้อมระบุรหัสการ์ด Prompt ที่ใช้ + คะแนนคุณภาพ `98/100` ไว้ใน `title`, `context_connected`, และ `audit_tag`\n"
             f"{core_rules}"
         )
     elif s_info["id"] == "all_5_styles":
         if output_mode == "strict_clip_only":
             mode_instruction = (
-                "โหมดที่เลือก: **แกะเฉพาะในคลิป/โพสต์ 100% แสดงผลครบทั้ง 6 แบบสกิล (`6 แบบ × 1 มุม = 6 กล่องข่าว`)**\n"
+                "โหมดที่เลือก: **แกะเฉพาะในคลิป/โพสต์ 100% แสดงผลครบทั้ง 2 แนวหลัก (`2 แนว × 1 มุม = 2 กล่องข่าว`)**\n"
                 "  • ใช้เฉพาะข้อเท็จจริงที่ได้จากภาพ-เสียงในคลิปและข้อความโพสต์ต้นทาง 100% เท่านั้น (ห้ามใช้ `search_web` ดึงข่าวอื่นมาปน และห้ามเดาข้อมูลที่ไม่มีในคลิปเด็ดขาด)\n"
-                "  • นำข้อเท็จจริงจริงชุดเดียวกันนี้ มาเรียบเรียงออกเป็น **6 แบบสกิล (`style_id: 'skill_set_1'` ถึง `'skill_set_6'`, `angle_type: 'normal'`)** เพื่อให้พนักงานเลือกโครงสร้างที่ชอบไปใช้เอง หากคลิปสั้นมีข้อมูลน้อย ให้เขียนสั้นกระชับเท่าที่มีข้อมูลจริงเท่านั้น\n"
+                "  • นำข้อเท็จจริงจริงชุดเดียวกันนี้ มาเรียบเรียงออกเป็น **2 แนวหลัก (`style_id: 'toon_dna_121'` และ `'applied_hybrid_131'`, `angle_type: 'normal'`)** หากคลิปสั้นมีข้อมูลน้อย ให้เขียนสั้นกระชับเท่าที่มีข้อมูลจริงเท่านั้น\n"
                 f"{core_rules}"
             )
         elif output_mode == "standard_4lock":
             mode_instruction = (
-                "โหมดที่เลือก: **มุมปกติล้วน แสดงผลครบทั้ง 6 แบบสกิล (`6 แบบ × 1 มุมปกติ = 6 กล่องข่าว`)**\n"
-                "  • สรุปใจความข่าวหลักจากข้อเท็จจริงที่มีหลักฐานรองรับ 100% แล้วจัดวางโครงสร้างออกเป็น **6 แบบสกิล (`style_id: 'skill_set_1'` ถึง `'skill_set_6'`, `angle_type: 'normal'`)** หากข้อมูลจริงมีน้อย ให้เขียนกระชับเท่าที่มีข้อเท็จจริงรองรับ ห้ามแต่งเติมข้อมูลเองเด็ดขาด\n"
+                "โหมดที่เลือก: **มุมปกติล้วน แสดงผลครบทั้ง 2 แนวหลัก (`2 แนว × 1 มุมปกติ = 2 กล่องข่าว`)**\n"
+                "  • สรุปใจความข่าวหลักจากข้อเท็จจริงที่มีหลักฐานรองรับ 100% แล้วจัดวางโครงสร้างออกเป็น **2 แนวหลัก (`style_id: 'toon_dna_121'` และ `'applied_hybrid_131'`, `angle_type: 'normal'`)** พร้อมขัดเกลาซ้ำจนได้ระดับ `97–98/100`\n"
                 f"{core_rules}"
             )
         elif output_mode == "spin_only_1":
             mode_instruction = (
-                "โหมดที่เลือก: **บิดประเด็นล้วน แสดงผลครบทั้ง 6 แบบสกิล (`6 แบบ × 1 มุมบิดประเด็น = 6 กล่องข่าว`)**\n"
-                "  • เจาะมุมบิดประเด็นจากข้อเท็จจริงจริงที่ค้นเจอและตรวจสอบยืนยันได้ 100% แล้วจัดวางโครงสร้างออกเป็น **6 แบบสกิล (`style_id: 'skill_set_1'` ถึง `'skill_set_6'`, `angle_type: 'spin'`)** ห้ามมโนข้อมูลที่ไม่มีแหล่งอ้างอิงจริงเด็ดขาด\n"
+                "โหมดที่เลือก: **บิดประเด็นล้วน แสดงผลครบทั้ง 2 แนวหลัก (`2 แนว × 1 มุมบิดประเด็น = 2 กล่องข่าว`)**\n"
+                "  • เจาะมุมบิดประเด็นจากข้อเท็จจริงจริงที่ค้นเจอและตรวจสอบยืนยันได้ 100% แล้วจัดวางโครงสร้างออกเป็น **2 แนวหลัก (`style_id: 'toon_dna_121'` และ `'applied_hybrid_131'`, `angle_type: 'spin'`)** พร้อมขัดเกลาซ้ำจนได้ระดับ `97–98/100`\n"
                 f"{core_rules}"
             )
         elif output_mode == "viral_3_para":
             mode_instruction = (
                 "โหมดที่เลือก: **ข่าวสั้นไวรัล 3 ย่อหน้า (จับคู่คลัง 254 DNA Prompts `viral-prompt-library` + `viral-news-writer`)**\n"
-                "  • รันสคริปต์ `python \"C:\\Users\\User\\.gemini\\config\\skills\\viral-prompt-library\\scripts\\match_prompt.py\" \"<สรุปใจความข่าว>\" --top 3` หรือเทียบจากคลัง 254 Prompts เพื่อเลือกการ์ด DNA ที่ตรงกับเนื้อข่าวที่สุด แล้วเขียนข่าว 3 ย่อหน้ากระชับตามโครงสร้างของการ์ดนั้น (สร้าง 2 กล่องใน `articles`: กล่องที่ 1 มุมปกติ 3 ย่อหน้า และ กล่องที่ 2 มุมบิดประเด็น 3 ย่อหน้า พร้อมระบุรหัส `[Prompt #XX]` ใน `title`)\n"
+                "  • เลือกการ์ด DNA จากคลัง 254 Prompts ที่ตรงกับเนื้อข่าวที่สุด แล้วเขียนข่าว 3 ย่อหน้ากระชับตามโครงสร้างของการ์ดนั้น (สร้าง 2 กล่องใน `articles`: กล่องที่ 1 มุมปกติ 3 ย่อหน้า และ กล่องที่ 2 มุมบิดประเด็น 3 ย่อหน้า พร้อมระบุรหัส `[prompt_xxxx • 98/100]` ใน `title`)\n"
+                f"{core_rules}"
+            )
+        elif output_mode == "normal_1_spin_2":
+            mode_instruction = (
+                "โหมดที่เลือก: **มุมปกติ 1 + บิดประเด็น 2 มุม แสดงผลครบทั้ง 2 แนวหลัก (`2 แนว × 3 มุม = 6 กล่องข่าว`)**\n"
+                "  • สร้าง 3 มุม (`มุมปกติ`, `บิดประเด็น 1`, `บิดประเด็น 2`) สำหรับทั้ง 2 แนวหลัก (`style_id: 'toon_dna_121'` และ `'applied_hybrid_131'`) รวม 6 กล่อง โดยขัดเกลาซ้ำจนได้ระดับ `97–98/100`\n"
                 f"{core_rules}"
             )
         else:
             mode_instruction = (
-                "โหมดที่เลือก: **แสดงผลครบทั้ง 6 แบบสกิล (`skill_set_1` ถึง `skill_set_6`) เพื่อให้พนักงานเลือกหยิบไปใช้เอง โดยยึดข้อเท็จจริงที่มีหลักฐานรองรับ 100% เท่านั้น**\n"
-                "  • **กรณีที่ 1 (ข่าวมีข้อมูลครบทั้งมุมปกติ + มีข้อมูลจริงชั้นที่ 2 จาก `search_web` สำหรับบิดประเด็น):** ให้สร้างอาร์เรย์ `articles` จำนวน **12 กล่อง (6 แบบ × 2 มุม คือ `angle_type: 'normal'` และ `angle_type: 'spin'`)** โดยทั้ง 6 แบบใช้ชุดข้อเท็จจริงจริงที่ตรวจสอบแล้วชุดเดียวกัน มาจัดโครงสร้างตามเอกลักษณ์ของแต่ละแบบ:\n"
-                "    1. `style_id: 'skill_set_1'` (แบบที่ 1: 1+3+1 เรียงดีเทลตัวเลข-เหตุการณ์จริง ไร้สำนวน 100%)\n"
-                "    2. `style_id: 'skill_set_2'` (แบบที่ 2: 1+3+1 เปิดด้วยคำพูด/ฉากจำจริง + ไล่สเต็ปแก้ปัญหาด้วยข้อมูลล้วน)\n"
-                "    3. `style_id: 'skill_set_3'` (แบบที่ 3: 1+4+1 ซอยช่วงกลาง 4 บรรทัดสั้นกระชับอ่านไว)\n"
-                "    4. `style_id: 'skill_set_4'` (แบบที่ 4: 1+2+1 หมัดหนักคู่เทียบตัวเลขก่อน-หลัง 4 บรรทัดจบ)\n"
-                "    5. `style_id: 'skill_set_5'` (แบบที่ 5 ⭐: 1+3+1 ไฮบริดเล่าลื่น ข้อมูลไวรัลแน่นสุดซอย)\n"
-                "    6. `style_id: 'skill_set_6'` (แบบที่ 6 💡: 1+3+1 สกิลลูกเล่นประยุกต์ข้อมูล เปลี่ยนข้อมูลลึกเป็นลูกเล่นการเล่า)\n"
-                "  • **กรณีที่ 2 (ถ้าข่าวต้นทางสั้นมาก / เป็นคลิปชาวบ้านหรือ CCTV เดี่ยว ที่ค้น `search_web` แล้วไม่มีข้อมูลจริงอีกห้องหนึ่งให้บิดประเด็น):** **ห้ามแต่งเรื่องหรือมั่วข้อมูลขึ้นมาเองเพื่อให้ครบ 12 กล่องเด็ดขาด!** ให้ทำเท่าที่มีข้อเท็จจริงจริงรองรับ 100% เท่านั้น (คือออกเฉพาะ **`มุมปกติ` 6 แบบ = 6 กล่อง** หรือหากบิดได้เฉพาะจุดสังเกตจริงในคลิป/ข้อกฎหมายที่มีหลักฐานจริงก็ใช้เฉพาะข้อเท็จจริงนั้น และหากข้อเท็จจริงในข่าวมีน้อย ให้ลดความยาวคำและจำนวนบรรทัดลงตามข้อมูลจริงทันที)\n"
+                "โหมดที่เลือก: **แสดงผลครบทั้ง 2 แนวหลัก มาตรฐาน 97–98/100 (`toon_dna_121` และ `applied_hybrid_131` = รวม 4 กล่องคมๆ) เพื่อให้พนักงานเลือกหยิบไปใช้เอง โดยยึดคำสั่งในช่องความต้องการ (`focus_instruction`) เป็นอันดับ 1**\n"
+                "  • **กรณีที่ 1 (ข่าวมีข้อมูลครบทั้งมุมปกติ + มีข้อมูลจริงชั้นที่ 2 จาก `search_web` สำหรับบิดประเด็น):** ให้สร้างอาร์เรย์ `articles` จำนวน **4 กล่อง (2 แนวหลัก × 2 มุม คือ `angle_type: 'normal'` และ `angle_type: 'spin'`)** โดยทุ่มสมาธิขัดเกลาทุกกล่องซ้ำหลายรอบจนได้ระดับ **`97–98/100`**:\n"
+                "    1. กล่องที่ 1 (`style_id: 'toon_dna_121'`, `angle_type: 'normal'`, `label: 'แนวที่ 1 (1+2+1 • 254 DNA) • มุมปกติ'`): โหมดกระชับ 4 ย่อหน้า (`1+2+1`) ย่อหน้าแรกผสานท่าเปิด 254 DNA ฮุคเข้าใจจบทั้งเรื่องทันที + ขยายที่มาและดีเทล 2 ย่อหน้า (ยึดกฎ `Single-Core Purity`) + ย่อหน้าสุดท้ายปิดด้วยอินเนอร์ตัวละคร (ระบุ `[prompt_xxxx • 98/100]` ใน `title`)\n"
+                "    2. กล่องที่ 2 (`style_id: 'toon_dna_121'`, `angle_type: 'spin'`, `label: 'แนวที่ 1 (1+2+1 • 254 DNA) • มุมบิดประเด็น'`): โหมดกระชับ 4 ย่อหน้า (`1+2+1`) สำหรับมุมบิดประเด็น (Room 2 / สูตรที่ 9 ขุดความดีเงียบๆ หรือข้อมูลจริงชั้นที่ 2 ตามที่พนักงานรีเควส) พร้อมปิดท้ายอินเนอร์ตัวละคร (ระบุ `[prompt_xxxx • 98/100]` ใน `title`)\n"
+                "    3. กล่องที่ 3 (`style_id: 'applied_hybrid_131'`, `angle_type: 'normal'`, `label: 'แนวที่ 2 (ลูกเล่น 1+3+1) • มุมปกติ'`): สกิลลูกเล่นประยุกต์ข้อมูล + ไฮบริดแตกบรรทัด (`1+3+1`) เปลี่ยนข้อมูลลึกเป็นลูกเล่นการเล่า (หักมุมตัวเลข / แกะรอยจากของ 1 ชิ้น / ถอดรหัสคำพูด / ตัดสลับ 2 โลก / กฎเหล็กจากแผลในอดีต) สำหรับมุมปกติ\n"
+                "    4. กล่องที่ 4 (`style_id: 'applied_hybrid_131'`, `angle_type: 'spin'`, `label: 'แนวที่ 2 (ลูกเล่น 1+3+1) • มุมบิดประเด็น'`): สกิลลูกเล่นประยุกต์ข้อมูล + ไฮบริดแตกบรรทัด (`1+3+1`) สำหรับมุมบิดประเด็น (Room 2)\n"
+                "  • **กรณีที่ 2 (ถ้าข่าวต้นทางสั้นมาก / เป็นคลิปชาวบ้านหรือ CCTV เดี่ยว ที่ค้น `search_web` แล้วไม่มีข้อมูลจริงอีกห้องหนึ่งให้บิดประเด็น):** **ห้ามแต่งเรื่องหรือมั่วข้อมูลขึ้นมาเองเด็ดขาด!** ให้ทำเท่าที่มีข้อเท็จจริงจริงรองรับ 100% เท่านั้น\n"
                 f"{core_rules}"
             )
     elif output_mode == "strict_clip_only":
         mode_instruction = (
             f"โหมดที่เลือก: แกะเฉพาะในคลิป/โพสต์ 100% ด้วย {s_info['full_badge']} (`strict_clip_only` -> สร้าง 1 กล่องข่าวใน `articles` โดย `label` = `'เฉพาะในคลิป 100%'`)\n"
-            "  • ใช้เฉพาะข้อมูลที่ได้จากคลิป/ภาพ/ข้อความต้นทาง 100% เท่านั้น (ห้ามใช้ `search_web` ค้นหาข่าวภายนอกมาปนเด็ดขาด) แล้วสรุปใจความข่าวครบวงจรตามโครงสร้าง 3 บล็อกของชุดสกิลที่เลือก"
+            "  • ใช้เฉพาะข้อมูลที่ได้จากคลิป/ภาพ/ข้อความต้นทาง 100% เท่านั้น (ห้ามใช้ `search_web` ค้นหาข่าวภายนอกมาปนเด็ดขาด) แล้วสรุปใจความข่าวครบวงจรตามโครงสร้างของชุดสกิลที่เลือก"
         )
     elif output_mode == "viral_3_para":
         mode_instruction = (
@@ -902,20 +1011,20 @@ async def process_job(
     elif output_mode == "normal_1_spin_2":
         mode_instruction = (
             f"โหมดที่เลือก: **มุมปกติ 1 ข่าว + บิดประเด็น 2 ข่าว** ด้วย **{s_info['full_badge']}** (`normal_1_spin_2` -> สร้าง **3 กล่องข่าวแยกกัน** ในอาร์เรย์ `articles`):\n"
-            f"  1. กล่องที่ 1 (`label`: `'มุมปกติ'`, `title`: `'1. ข่าวแบบมุมปกติ — {s_info['short_tag']}'`): สรุปใจความข่าวหลักตามหลักของ {s_info['short_tag']} (Room 1)\n"
-            f"  2. กล่องที่ 2 (`label`: `'บิดประเด็น 1'`, `title`: `'2. ข่าวแบบบิดประเด็น มุมที่ 1 — {s_info['short_tag']}'`): บิดประเด็นมุมที่ 1 (Room 2)\n"
-            f"  3. กล่องที่ 3 (`label`: `'บิดประเด็น 2'`, `title`: `'3. ข่าวแบบบิดประเด็น มุมที่ 2 — {s_info['short_tag']}'`): บิดประเด็นมุมที่ 2 (Room 3)\n"
+            f"  1. กล่องที่ 1 (`label`: `'มุมปกติ'`, `title`: `'1. ข่าวแบบมุมปกติ — {s_info['short_tag']}'`, `style_id`: `'{s_info['id']}'`, `angle_type`: `'normal'`): สรุปใจความข่าวหลักตามหลักของ {s_info['short_tag']} (Room 1)\n"
+            f"  2. กล่องที่ 2 (`label`: `'บิดประเด็น 1'`, `title`: `'2. ข่าวแบบบิดประเด็น มุมที่ 1 — {s_info['short_tag']}'`, `style_id`: `'{s_info['id']}'`, `angle_type`: `'spin'`): บิดประเด็นมุมที่ 1 (Room 2)\n"
+            f"  3. กล่องที่ 3 (`label`: `'บิดประเด็น 2'`, `title`: `'3. ข่าวแบบบิดประเด็น มุมที่ 2 — {s_info['short_tag']}'`, `style_id`: `'{s_info['id']}'`, `angle_type`: `'spin'`): บิดประเด็นมุมที่ 2 (Room 3)\n"
             f"{core_rules}"
         )
     elif output_mode == "spin_only_1":
         mode_instruction = (
-            f"โหมดที่เลือก: **บิดประเด็นล้วน 1 ข่าว** ด้วย **{s_info['full_badge']}** (`spin_only_1` -> สร้าง **1 กล่องข่าว** ในอาร์เรย์ `articles` โดย `label` = `'บิดประเด็น'`):\n"
+            f"โหมดที่เลือก: **บิดประเด็นล้วน 1 ข่าว** ด้วย **{s_info['full_badge']}** (`spin_only_1` -> สร้าง **1 กล่องข่าว** ในอาร์เรย์ `articles` โดย `label` = `'บิดประเด็น'`, `style_id` = `'{s_info['id']}'`, `angle_type` = `'spin'`):\n"
             f"  • เจาะมุมบิดตามหลักของ {s_info['short_tag']} และความต้องการของพนักงาน โดยมีสะพานปูที่มาข่าวหลักสั้นๆ ครึ่งถึง 1 บรรทัด (กฎ 95/5)\n"
             f"{core_rules}"
         )
     else:
         mode_instruction = (
-            f"โหมดที่เลือก: **มุมปกติ 1 ข่าว** ด้วย **{s_info['full_badge']}** (`standard_4lock` -> สร้าง **1 กล่องข่าว** ในอาร์เรย์ `articles` โดย `label` = `'มุมปกติ'`):\n"
+            f"โหมดที่เลือก: **มุมปกติ 1 ข่าว** ด้วย **{s_info['full_badge']}** (`standard_4lock` -> สร้าง **1 กล่องข่าว** ในอาร์เรย์ `articles` โดย `label` = `'มุมปกติ'`, `style_id` = `'{s_info['id']}'`, `angle_type` = `'normal'`):\n"
             f"{core_rules}"
         )
 
@@ -923,17 +1032,17 @@ async def process_job(
         f"\n🚨 **คำสั่งบังคับสูงสุดจากช่องความต้องการของพนักงาน (`focus_instruction` — สำคัญอันดับ 1 เหนือค่าเริ่มต้นทุกข้อ):**\n"
         f"👉 **\"{focus_instruction}\"**\n"
         f"  • **บังคับในการค้นข้อมูล (`search_web`):** ต้องตั้งคำค้น `search_web` เพื่อสืบหาข้อเท็จจริง ประวัติ เหตุการณ์ตั้งแต่ต้น หรือประเด็นเฉพาะที่พนักงานระบุในคำสั่งด้านบนโดยตรง!\n"
-        f"  • **บังคับในการเลือกมุมและโทนภาษา:** ต้องยึดมุมประเด็น โทนอารมณ์ (เช่น ซอฟๆ / ชื่นชมจากใจจริง / ใส่อินเนอร์ตัวละคร / เจาะเหตุผลกฎหมาย) และจำนวนข่าวตามที่พนักงานสั่งในข้อความด้านบน 100% ห้ามเพิกเฉยหรือเขียนหลุดจากโจทย์ที่พนักงานสั่งเด็ดขาด!\n"
+        f"  • **บังคับในการเลือกมุมและโทนภาษาในทุกกล่อง:** ต้องยึดมุมประเด็น โทนอารมณ์ (เช่น ซอฟๆ / ชื่นชมจากใจจริง / ใส่อินเนอร์ตัวละคร / เจาะเหตุผลกฎหมาย) ตามที่พนักงานสั่งในข้อความด้านบน 100% ห้ามเพิกเฉยหรือเขียนหลุดจากโจทย์ที่พนักงานสั่งเด็ดขาด!\n"
         if focus_instruction
         else ""
     )
 
-    prompt = f"""คุณคือระบบวิเคราะห์ สรุปใจความข่าว และบิดประเด็นข่าวไวรัลความแม่นยำสูง โดยงานนี้เลือกใช้ **{s_info['full_badge']}** เพียงชุดเดียวเท่านั้น (แยกทักษะชัดเจน ห้ามปนกับชุดสกิลอื่น)
+    prompt = f"""คุณคือระบบวิเคราะห์ สรุปใจความข่าว และบิดประเด็นข่าวไวรัลความแม่นยำสูง โดยงานนี้เลือกใช้ **{s_info['full_badge']}**
 ในโฟลเดอร์งาน `{job_dir.as_posix()}` มีไฟล์ที่เตรียมไว้เรียบร้อยแล้ว ได้แก่: {files_list_str}
 
 ขั้นตอนการทำงานบังคับ:
 1. ใช้เครื่องมือ `read_file` เปิดอ่านไฟล์ทั้งหมดในรายการด้านบนเป็นอันดับแรก:
-   - **ต้องอ่าน `SKILL_GUIDES.md` เป็นอันดับแรก** เพื่อยึดกฎการรีเสิร์ช โครงสร้างมุมปกติ โครงสร้างมุมบิด และกฎข้อห้ามของ **{s_info['full_badge']}** แบบ 100%
+   - **ต้องอ่าน `SKILL_GUIDES.md` เป็นอันดับแรก** เพื่อดูการ์ด 254 DNA Prompts ที่คัดกรองไว้ให้ และยึดกฎการรีเสิร์ช โครงสร้างมุมปกติ โครงสร้างมุมบิด และกฎข้อห้ามของ **{s_info['full_badge']}** แบบ 100%
    - อ่าน `job_context.json` เพื่อดูวันเวลาโพสต์จริง (`upload_timestamp`), แคปชัน, ชื่อผู้โพสต์ และคำสั่งจากพนักงาน
    - หากมีไฟล์ภาพ Contact Sheet (`sheet_1.jpg`, `sheet_2.jpg`, ...) หรือภาพที่พนักงานอัปโหลด (`uploaded_*`) ต้องเปิดดูด้วย `read_file` ทุกไฟล์ เพื่อดูเหตุการณ์ การกระทำ สีหน้า สถานที่ ป้ายข้อความในภาพ
    - **กรณีคลิปกล้องวงจรปิด (CCTV) / กล้องหน้ารถ / คลิปเหตุการณ์ที่ไม่มีเสียงบรรยาย:** ให้ไล่อ่านภาพทีละเฟรมตามเวลาวินาทีสีเหลืองมุมซ้ายบน (ดูแสงแดดกลางวัน/กลางคืนจริง ห้ามมโนเวลา, แยกสีเสื้อผ้า/บุคคลให้แม่นยำ ห้ามสลับคน)
@@ -944,7 +1053,7 @@ async def process_job(
    - Lock 1 (Timestamp Lock): ยึดช่วงเวลาเดียวกับ `upload_timestamp` ในคลิป/โพสต์ ห้ามนำข่าวคนละปีมาปน (ยกเว้นการขุดประวัติ/ไทม์ไลน์อดีตของบุคคลเดียวกันเพื่อนำมาบิดประเด็นตามข้อเท็จจริงจริง)
    - Lock 2 (Clip Genre Gate): ถ้าเป็นคลิปคนดัง/ข่าวสาธารณะ/ตัดจากรายการ หรือมีชื่อบุคคล/เพจปรากฏชัด ให้ค้นเชื่อมโยงต้นเรื่องเต็ม (ชั้นที่ 1) และค้นข้อมูลเจาะลึกตามแนวทางของ **{s_info['short_tag']}** (ชั้นที่ 2) เสมอ แต่ถ้าเป็นคลิปชาวบ้านทั่วไป/CCTV ที่ไม่มีชื่อบุคคลและไม่มีข่าวรายงานเคสเดียวกันเป๊ะๆ ห้ามนำข่าวเคสอื่นมาสวมทับ
    - Lock 3 (3-Point Match): ข้อมูลต้องตรงบุคคล + สถานที่/เหตุการณ์ + ช่วงเวลา (ระวังคนชื่อคล้ายกันคนละอาชีพ เช่น แยกชื่อ-นามสกุลจริงจากป้ายชื่อ/เอกสารให้แม่นยำ)
-   - Lock 4 (Mandatory Skill-Specific Search Execution): ในทุกโหมด (ยกเว้น `strict_clip_only`) **ต้องเรียกใช้ `search_web` จริงเสมออย่างน้อย 2–5 ครั้ง** ตามขั้นตอนการรีเสิร์ชใน `SKILL_GUIDES.md` ของ **{s_info['short_tag']}** ห้ามหยุดค้นแค่ชั้นเดียวแล้วเอาเนื้อหากล่องแรกมาแบ่งครึ่งเขียนซ้ำเด็ดขาด!
+   - Lock 4 (Mandatory Skill-Specific Search Execution): ในทุกโหมด (ยกเว้น `strict_clip_only`) **ต้องเรียกใช้ `search_web` จริงเสมออย่างน้อย 2–4 ครั้ง** ตามขั้นตอนการรีเสิร์ชใน `SKILL_GUIDES.md` ห้ามหยุดค้นแค่ชั้นเดียวแล้วเอาเนื้อหากล่องแรกมาแบ่งครึ่งเขียนซ้ำเด็ดขาด!
 
 เมื่อเขียนและขัดเกลาซ้ำหลายรอบจนได้มาตรฐาน 97–98/100 ทุกบรรทัดแล้ว (เช็กซ้ำว่ายึดกฎ Single-Core Purity ไม่เอาข้อมูลหลุดโทนมาปน, ไร้คำต้องห้าม 'เบื้องหลัง...' / 'จึงสะท้อนชัดเจนว่า...', ไร้คำอังกฤษปนไทยในเนื้อข่าว, แต่ละบรรทัดไม่เกิน 220 ตัวอักษร, และใน `content` ของแต่ละกล่องใส่เฉพาะตัวเนื้อข่าวล้วนๆ ห้ามใส่หัวข้อนำหน้าซ้ำใน `content` และห้ามครอบด้วย ```text) ให้บันทึกผลลัพธ์ลงไฟล์ `{job_dir.as_posix()}/result.json` ด้วย `write_file` ทันที (เมื่อ `write_file` บันทึก `result.json` สำเร็จแล้ว ให้ตอบสั้นๆ เพียงคำว่า `"SAVED_OK"` เท่านั้น ห้ามพิมพ์ก้อน JSON ซ้ำออกมาทางหน้าจอเด็ดขาด!) ตามโครงสร้างนี้เท่านั้น:
 {{
@@ -953,23 +1062,37 @@ async def process_job(
   "skill_set_label": "{s_info['full_badge']}",
   "articles": [
     {{
-      "style_id": "skill_set_1",
+      "style_id": "toon_dna_121",
       "angle_type": "normal",
-      "label": "แบบที่ 1 • มุมปกติ",
-      "title": "แบบที่ 1: อัดดีเทลตัวเลขครบ (1+3+1) — มุมปกติ",
-      "content": "บรรทัดเปิดเรื่องคมๆ 1 บรรทัด\\n\\nบรรทัดเนื้อหาเจาะลึกจุดที่ 1\\nบรรทัดเนื้อหาเจาะลึกจุดที่ 2\\nบรรทัดเนื้อหาเจาะลึกจุดที่ 3\\n\\nบรรทัดขมวดจบตามธรรมชาติ 1 บรรทัด"
+      "label": "แนวที่ 1 (1+2+1 • 254 DNA) • มุมปกติ",
+      "title": "แนวที่ 1: กระชับ 1+2+1 ฮุคจบย่อหน้าแรก [prompt_xxxx • 98/100] — มุมปกติ",
+      "content": "ย่อหน้าที่ 1 (ผสานท่าเปิด 254 DNA ฮุคเข้าใจจบทั้งเรื่องทันที 2-3 บรรทัด)\\n\\nย่อหน้าที่ 2 (ที่มา/จุดเริ่มต้น ยึด Single-Core Purity 2-3 บรรทัด)\\n\\nย่อหน้าที่ 3 (ดีเทลการลงมือทำจริง/ตัวเลขผลลัพธ์ 2-3 บรรทัด)\\n\\nย่อหน้าที่ 4 (ท่อนปิดท้ายอินเนอร์ความรู้สึกของตัวละคร 2 บรรทัด)"
     }},
     {{
-      "style_id": "skill_set_1",
+      "style_id": "toon_dna_121",
       "angle_type": "spin",
-      "label": "แบบที่ 1 • มุมบิดประเด็น",
-      "title": "แบบที่ 1: อัดดีเทลตัวเลขครบ (1+3+1) — มุมบิดประเด็น",
-      "content": "บรรทัดเปิดเรื่องมุมบิด (คนละห้องข้อมูลกับมุมปกติ) 1 บรรทัด\\n\\nบรรทัดเนื้อหาเจาะลึกจุดที่ 1\\nบรรทัดเนื้อหาเจาะลึกจุดที่ 2\\nบรรทัดเนื้อหาเจาะลึกจุดที่ 3\\n\\nบรรทัดขมวดจบตามธรรมชาติ 1 บรรทัด"
+      "label": "แนวที่ 1 (1+2+1 • 254 DNA) • มุมบิดประเด็น",
+      "title": "แนวที่ 1: กระชับ 1+2+1 ฮุคจบย่อหน้าแรก [prompt_xxxx • 98/100] — มุมบิดประเด็น",
+      "content": "ย่อหน้าที่ 1 (ฮุคมุมบิดประเด็นคนละห้องข้อมูลกับมุมปกติ เข้าใจจบในย่อหน้าแรก 2-3 บรรทัด)\\n\\nย่อหน้าที่ 2 (ที่มา/เหตุการณ์จริงชั้นที่ 2 2-3 บรรทัด)\\n\\nย่อหน้าที่ 3 (ดีเทลการกระทำจริง/ผลลัพธ์ 2-3 บรรทัด)\\n\\nย่อหน้าที่ 4 (ท่อนปิดท้ายอินเนอร์ความรู้สึกของตัวละคร 2 บรรทัด)"
+    }},
+    {{
+      "style_id": "applied_hybrid_131",
+      "angle_type": "normal",
+      "label": "แนวที่ 2 (ลูกเล่น 1+3+1) • มุมปกติ",
+      "title": "แนวที่ 2: สกิลลูกเล่นประยุกต์ข้อมูล + ไฮบริดแตกบรรทัด (1+3+1 • 98/100) — มุมปกติ",
+      "content": "บรรทัดเปิดเรื่องด้วยลูกเล่นคมๆ 1 บรรทัด\\n\\nบรรทัดเนื้อหาเจาะลึกจุดที่ 1\\nบรรทัดเนื้อหาเจาะลึกจุดที่ 2\\nบรรทัดเนื้อหาเจาะลึกจุดที่ 3\\n\\nบรรทัดขมวดจบตามธรรมชาติ 1 บรรทัด"
+    }},
+    {{
+      "style_id": "applied_hybrid_131",
+      "angle_type": "spin",
+      "label": "แนวที่ 2 (ลูกเล่น 1+3+1) • มุมบิดประเด็น",
+      "title": "แนวที่ 2: สกิลลูกเล่นประยุกต์ข้อมูล + ไฮบริดแตกบรรทัด (1+3+1 • 98/100) — มุมบิดประเด็น",
+      "content": "บรรทัดเปิดเรื่องมุมบิดด้วยลูกเล่น (คนละห้องข้อมูลกับมุมปกติ) 1 บรรทัด\\n\\nบรรทัดเนื้อหาเจาะลึกจุดที่ 1\\nบรรทัดเนื้อหาเจาะลึกจุดที่ 2\\nบรรทัดเนื้อหาเจาะลึกจุดที่ 3\\n\\nบรรทัดขมวดจบตามธรรมชาติ 1 บรรทัด"
     }}
   ],
   "raw_news": "เนื้อข่าวรวมทุกกล่อง",
   "visual_audio_breakdown": "สรุปข้อเท็จจริงดิบที่สกัดได้จากภาพ-เสียงในคลิปหรือบทความต้นทางแบบละเอียด",
-  "context_connected": "ระบุผลลัพธ์การค้นหาจริงตามหลักของ {s_info['short_tag']} แยกเป็น (ชั้นที่ 1: ข้อมูลต้นทางฉบับเต็ม), (ชั้นที่ 2: ข้อมูลเจาะลึกที่ค้นเจอจริงจาก search_web), และ (การ์ด Prompt ที่จับคู่จาก 254 แนว + คะแนนคุณภาพ 98/100)",
+  "context_connected": "ระบุผลลัพธ์การค้นหาจริง แยกเป็น (ชั้นที่ 1: ข้อมูลต้นทางฉบับเต็ม), (ชั้นที่ 2: ข้อมูลเจาะลึกที่ค้นเจอจริงจาก search_web), และ (การ์ด Prompt ที่จับคู่จาก 254 แนว + คะแนนคุณภาพ 98/100)",
   "audit_tag": "✅ {s_info['full_badge']} • [Prompt DNA Matched • มาตรฐาน 98/100] • [ที่มาข้อมูล: ระบุแหล่งต้นทางจริง + ข้อมูลชั้นที่ 2 ที่ค้นตรวจซ้ำ]",
   "fact_check_references": [
     {{

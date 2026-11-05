@@ -326,7 +326,7 @@ async def background_worker(
                 skill_set=skill_set,
             )
             result = await asyncio.to_thread(upload_job_media_to_cloud, job_id, job_dir, result)
-            await asyncio.to_thread(update_job_progress, job_id, "completed", "สรุปเนื้อข่าวครบทั้ง 6 แบบ (มาตรฐาน 98/100) เรียบร้อย!", 100, result)
+            await asyncio.to_thread(update_job_progress, job_id, "completed", "สรุปเนื้อข่าวครบทั้ง 2 แนวหลัก (4 กล่อง • มาตรฐาน 98/100) เรียบร้อย!", 100, result)
         except Exception as e:
             s_err = str(e)
             if isinstance(e, subprocess.TimeoutExpired) or "timed out" in s_err.lower():
@@ -766,7 +766,7 @@ async def retry_job(job_id: str):
                 "raw_text": item["raw_text"],
                 "focus_instruction": item["focus_instruction"],
                 "output_mode": item["output_mode"] or "normal_1_spin_1",
-                "skill_set": item.get("skill_set") or "skill_set_5",
+                "skill_set": item.get("skill_set") or "all_5_styles",
                 "created_at": item["created_at"],
             }
     if not j:
