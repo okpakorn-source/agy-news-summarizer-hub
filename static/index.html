@@ -55,17 +55,34 @@
           <span class="text-emerald-400">เสร็จแล้ว <strong id="stat-completed">0</strong></span>
         </div>
 
+        <!-- Batch 5-Story 1+2+1 Copy Button -->
+        <button type="button" onclick="openBatchPackModal('pack_celebrity_story')"
+          class="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-bold px-3 py-1.5 rounded-xl text-xs shadow transition flex items-center gap-1.5">
+          <span>📦 ก๊อบปี้ชุด 5 ข่าว (1+2+1)</span>
+        </button>
+
+        <!-- Updated Skills Reference Button -->
+        <button type="button" onclick="openSkillsModal()"
+          class="bg-violet-500/20 hover:bg-violet-500 text-violet-200 hover:text-white border border-violet-500/40 px-3 py-1.5 rounded-xl text-xs font-semibold transition flex items-center gap-1.5">
+          <span>📚 สกิลที่อัปเดตล่าสุด</span>
+        </button>
+
         <!-- Share Link Button -->
         <button onclick="toggleShareModal()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-3 py-1.5 rounded-xl text-xs font-medium transition flex items-center gap-1.5">
           <span>🔗 ลิงก์พนักงาน</span>
         </button>
 
-        <!-- Employee Name -->
-        <div class="flex items-center gap-1.5 bg-slate-800/90 border border-slate-700 rounded-xl px-3 py-1.5">
-          <span class="text-xs text-slate-400">👤</span>
-          <input id="employee-name" type="text" value="พนักงาน 1" onchange="saveEmployeeName()"
-            class="bg-transparent text-xs font-semibold text-emerald-300 focus:outline-none w-24"
-            title="คลิกเพื่อตั้งชื่อของคุณ" />
+        <!-- Employee Nickname Badge -->
+        <div class="flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/40 rounded-xl px-3 py-1.5">
+          <span class="text-xs text-emerald-300 font-medium">👤 ชื่อเล่น:</span>
+          <input id="employee-name" type="text" value="" onchange="saveEmployeeName()"
+            placeholder="ใส่ชื่อเล่น..."
+            class="bg-transparent text-xs font-bold text-white focus:outline-none w-20 sm:w-24"
+            title="คลิกเพื่อแก้ไขชื่อเล่นของคุณ" />
+          <button type="button" onclick="openNicknameModal()"
+            class="text-[11px] bg-emerald-500/20 hover:bg-emerald-500 text-emerald-300 hover:text-slate-950 font-semibold px-2 py-0.5 rounded-lg transition">
+            ✏️ เปลี่ยน
+          </button>
         </div>
       </div>
     </div>
@@ -132,10 +149,18 @@
             </label>
             <input type="hidden" id="output-mode" value="normal_1_spin_1" />
             <div class="grid grid-cols-2 gap-2" id="mode-grid">
+              <button type="button" data-mode="toon_121" onclick="selectOutputMode('toon_121')"
+                class="mode-btn col-span-2 text-left p-2.5 rounded-xl border transition bg-slate-950/70 border-amber-500/40 hover:border-amber-400 text-slate-200">
+                <div class="text-xs font-bold flex items-center justify-between">
+                  <span>⭐ โหมดกระชับ 1+2+1 (โมเดลพี่ตูน 1,600M)</span>
+                  <span class="text-[10px] px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 font-bold">ฮุคจบในย่อหน้าแรก</span>
+                </div>
+                <div class="text-[10px] text-slate-400 mt-0.5">4 ย่อหน้าสั้น: ฮุคเข้าใจจบในย่อหน้าแรก + ขยาย 2 ย่อหน้า + ปิดท้ายอินเนอร์ตัวละคร</div>
+              </button>
               <button type="button" data-mode="normal_1_spin_1" onclick="selectOutputMode('normal_1_spin_1')"
                 class="mode-btn text-left p-2.5 rounded-xl border transition bg-emerald-500/15 border-emerald-500 text-white">
                 <div class="text-xs font-bold text-emerald-300">🔥 มุมปกติ 1 + บิด 1</div>
-                <div class="text-[10px] text-slate-300 mt-0.5">ได้ครบ 2 กล่องแยกก๊อป</div>
+                <div class="text-[10px] text-slate-300 mt-0.5">ได้ครบ 2 มุมแยกก๊อป (6 แบบ)</div>
               </button>
               <button type="button" data-mode="normal_1_spin_2" onclick="selectOutputMode('normal_1_spin_2')"
                 class="mode-btn text-left p-2.5 rounded-xl border transition bg-slate-950/70 border-slate-800 hover:border-slate-700 text-slate-200">
@@ -150,12 +175,12 @@
               <button type="button" data-mode="spin_only_1" onclick="selectOutputMode('spin_only_1')"
                 class="mode-btn text-left p-2.5 rounded-xl border transition bg-slate-950/70 border-slate-800 hover:border-slate-700 text-slate-200">
                 <div class="text-xs font-bold">🎯 บิดประเด็นล้วน 1</div>
-                <div class="text-[10px] text-slate-400 mt-0.5">เจาะมุมบิด + ปูที่มาสั้นๆ</div>
+                <div class="text-[10px] text-slate-400 mt-0.5">เจาะมุมบิด + สูตร 9 ความดีเงียบๆ</div>
               </button>
               <button type="button" data-mode="viral_3_para" onclick="selectOutputMode('viral_3_para')"
                 class="mode-btn text-left p-2.5 rounded-xl border transition bg-slate-950/70 border-slate-800 hover:border-slate-700 text-slate-200">
-                <div class="text-xs font-bold">📝 ข่าวสั้น 3 ย่อหน้า</div>
-                <div class="text-[10px] text-slate-400 mt-0.5">กระชับ อ่านจบใน 15 วิ</div>
+                <div class="text-xs font-bold">📝 ข่าวสั้น 3 ย่อหน้า (254 DNA)</div>
+                <div class="text-[10px] text-slate-400 mt-0.5">จับคู่คลัง 254 Prompts อัตโนมัติ</div>
               </button>
               <button type="button" data-mode="strict_clip_only" onclick="selectOutputMode('strict_clip_only')"
                 class="mode-btn text-left p-2.5 rounded-xl border transition bg-slate-950/70 border-slate-800 hover:border-slate-700 text-slate-200">
@@ -165,66 +190,53 @@
             </div>
           </div>
 
-          <!-- 3. Skill Set Selector (5 Standalone Non-Overlapping Skill Sets!) -->
-          <div>
-            <div class="flex items-center justify-between mb-1.5">
-              <label class="block text-xs font-semibold text-slate-200">
-                3. 🧠 เลือกชุดสกิล / หลักการรีเสิร์ชและเล่าเรื่อง (แยก 5 ชุดสกิลชัดเจน)
-              </label>
-              <span class="text-[10px] text-sky-400 font-medium">ระบุชุดสกิลบนการ์ดทุกงาน</span>
-            </div>
-            <input type="hidden" id="skill-set" value="skill_set_5" />
-            <div class="space-y-1.5" id="skill-set-grid">
-              <button type="button" data-skill="skill_set_5" onclick="selectSkillSet('skill_set_5')"
-                class="skill-btn w-full text-left px-3 py-2 rounded-xl border transition bg-sky-500/15 border-sky-500 text-white shadow-sm">
-                <div class="text-xs font-bold text-sky-300 flex items-center justify-between">
-                  <span>⭐ ชุดสกิลที่ 5: ลูกผสม 3 มิติขั้นสุด (แนะนำ)</span>
-                  <span class="text-[10px] px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-200">ครบเครื่องที่สุด</span>
+          <!-- 3. All 6 Styles Standard Badge + Skill Set 6 Quick Toggle -->
+          <div class="space-y-2">
+            <input type="hidden" id="skill-set" value="all_5_styles" />
+            <div class="grid grid-cols-1 gap-1.5">
+              <button type="button" data-skill="all_5_styles" onclick="selectSkillSet('all_5_styles')"
+                class="skill-btn w-full text-left px-3 py-2.5 rounded-xl border transition bg-emerald-500/15 border-emerald-500 text-white shadow-sm">
+                <div class="text-xs font-bold text-emerald-300 flex items-center justify-between">
+                  <span>🔥 มาตรฐานใหม่: 1 ข่าวสร้างครบทั้ง 6 แบบอัตโนมัติ (แบบที่ 1–6)</span>
+                  <span class="text-[10px] px-2 py-0.5 rounded-md bg-emerald-500/25 text-emerald-200 font-bold">6 แบบ × 2 มุม</span>
                 </div>
-                <div class="text-[10px] text-slate-300 mt-0.5">ผสานต้นทางครบ + ทะเบียนเอกสารรัฐ/ข้อกฎหมายจริง + ภาพจำหัวใจมนุษย์</div>
+                <div class="text-[11px] text-slate-300 mt-0.5 leading-relaxed">
+                  ออกครบทั้ง <strong class="text-white">แบบที่ 1–5</strong> + <strong class="text-amber-300">แบบที่ 6 (สกิลลูกเล่นประยุกต์ข้อมูล 💡)</strong> ให้เลือกสลับในคลัง
+                </div>
               </button>
-              <div class="grid grid-cols-2 gap-1.5">
-                <button type="button" data-skill="skill_set_1" onclick="selectSkillSet('skill_set_1')"
-                  class="skill-btn text-left p-2 rounded-xl border transition bg-slate-950/70 border-slate-800 hover:border-slate-700 text-slate-200">
-                  <div class="text-[11px] font-bold">🕰️ ชุดสกิลที่ 1: ไทม์ไลน์อดีต</div>
-                  <div class="text-[10px] text-slate-400 mt-0.5">รีเสิร์ช 2 ชั้น & ย้อนภาพจำตามปี</div>
-                </button>
-                <button type="button" data-skill="skill_set_2" onclick="selectSkillSet('skill_set_2')"
-                  class="skill-btn text-left p-2 rounded-xl border transition bg-slate-950/70 border-slate-800 hover:border-slate-700 text-slate-200">
-                  <div class="text-[11px] font-bold">⚖️ ชุดสกิลที่ 2: ผ่าข้อกฎหมาย</div>
-                  <div class="text-[10px] text-slate-400 mt-0.5">เจาะมาตรากฎหมาย & ทะเบียนรัฐ</div>
-                </button>
-                <button type="button" data-skill="skill_set_3" onclick="selectSkillSet('skill_set_3')"
-                  class="skill-btn text-left p-2 rounded-xl border transition bg-slate-950/70 border-slate-800 hover:border-slate-700 text-slate-200">
-                  <div class="text-[11px] font-bold">⚡ ชุดสกิลที่ 3: เทียบตัวเลข/ท่าที</div>
-                  <div class="text-[10px] text-slate-400 mt-0.5">วางคู่ขนาน 2 ฝั่งตัดกันหมัดต่อหมัด</div>
-                </button>
-                <button type="button" data-skill="skill_set_4" onclick="selectSkillSet('skill_set_4')"
-                  class="skill-btn text-left p-2 rounded-xl border transition bg-slate-950/70 border-slate-800 hover:border-slate-700 text-slate-200">
-                  <div class="text-[11px] font-bold">💬 ชุดสกิลที่ 4: เจาะ 1 ประโยค</div>
-                  <div class="text-[10px] text-slate-400 mt-0.5">ถอดรหัสคำพูดสั้นๆ ขยี้หัวใจมนุษย์</div>
-                </button>
-              </div>
+              <button type="button" data-skill="skill_set_6" onclick="selectSkillSet('skill_set_6')"
+                class="skill-btn text-left p-2 rounded-xl border transition bg-slate-950/70 border-slate-800 hover:border-slate-700 text-slate-200">
+                <div class="text-[11px] font-bold">💡 เน้นเฉพาะชุดสกิลที่ 6: สกิลลูกเล่นประยุกต์ข้อมูล (1+3+1)</div>
+                <div class="text-[10px] text-slate-400 mt-0.5">เปลี่ยนข้อมูลรีเสิร์ชลึกเป็นลูกเล่นหักมุม/แกะรอยจากของ 1 ชิ้น ไม่เรียงทื่อๆ</div>
+              </button>
             </div>
           </div>
 
-          <!-- 4. Custom Requirement / Angle Box (Prominent upfront!) -->
+          <!-- 3. Custom Requirement / Angle Box (Prominent upfront!) -->
           <div>
             <div class="flex items-center justify-between mb-1.5">
               <label for="focus-instruction" class="block text-xs font-semibold text-slate-200">
-                4. 💬 ความต้องการ / แนวประเด็นที่อยากเน้นหรือบิด
+                3. 💬 ความต้องการ / แนวประเด็นที่อยากเน้นหรือบิด
               </label>
               <span class="text-[10px] text-emerald-400">พิมพ์สั่งเหมือนคุยแชตได้เลย</span>
             </div>
             <textarea id="focus-instruction" rows="3"
-              placeholder="เช่น ขอแนวชื่นชมช้างสุรินทร์ ค้นข้อมูลน่าสนใจมาชมให้คนอ่านอิน / เน้นประเด็นที่พันล้านลูกไม่เอา พ่อเลยยกให้พระ (เว้นว่างได้ ระบบจะคัดมุมที่ดีที่สุดให้เอง)"
+              placeholder="เช่น ขอโหมด 1+2+1 ฮุคจบในย่อหน้าแรก / ใช้สกิลลูกเล่น ขุดความดีเงียบๆ สวนกระแสดราม่า (เว้นว่างได้ ระบบจะคัดมุมที่ดีที่สุดให้เอง)"
               class="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none transition leading-relaxed"></textarea>
 
             <!-- Quick Helper Chips -->
             <div class="flex flex-wrap gap-1.5 mt-2">
-              <button type="button" onclick="appendPromptChip('ค้นข้อมูลน่าสนใจเชิงลึกมาเสริมให้คนอ่านอินจนจบ')"
-                class="text-[11px] bg-slate-800/90 hover:bg-slate-700 text-slate-300 border border-slate-700/70 px-2 py-1 rounded-lg transition">
-                + ค้นข้อมูลน่าสนใจให้อิน
+              <button type="button" onclick="selectOutputMode('toon_121'); appendPromptChip('เขียนโหมด 1+2+1 ฮุคเข้าใจจบในย่อหน้าแรก และขมวดจบใส่อินเนอร์ตัวละคร')"
+                class="text-[11px] bg-amber-500/15 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 px-2 py-1 rounded-lg font-medium transition">
+                ⭐ โหมด 1+2+1 ฮุคจบในย่อหน้าแรก+อินเนอร์
+              </button>
+              <button type="button" onclick="appendPromptChip('บิดสูตรที่ 9 ขุดความดีเงียบๆ ของตัวละคร หรือข่าวน้ำดีกตัญญูสวนกระแสดราม่า')"
+                class="text-[11px] bg-emerald-500/15 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 px-2 py-1 rounded-lg font-medium transition">
+                💚 สูตร 9: ขุดความดีเงียบๆ สวนกระแสดราม่า
+              </button>
+              <button type="button" onclick="selectSkillSet('skill_set_6'); appendPromptChip('ใช้สกิลลูกเล่นประยุกต์ข้อมูล (ชุดสกิลที่ 6) เอาข้อมูลลึกมาเป็นลูกเล่นของประเด็น')"
+                class="text-[11px] bg-sky-500/15 hover:bg-sky-500/30 text-sky-300 border border-sky-500/40 px-2 py-1 rounded-lg font-medium transition">
+                💡 ใช้สกิลลูกเล่นประยุกต์ข้อมูล (ชุดที่ 6)
               </button>
               <button type="button" onclick="appendPromptChip('ขอแนวชื่นชมจากใจจริง และสืบค้นความทรงจำหรือเหตุการณ์ดีๆ ในอดีตมาเล่า')"
                 class="text-[11px] bg-slate-800/90 hover:bg-slate-700 text-slate-300 border border-slate-700/70 px-2 py-1 rounded-lg transition">
@@ -267,6 +279,16 @@
             </div>
           </details>
 
+          <!-- Creator Attribution Banner before Submit -->
+          <div class="bg-emerald-500/10 border border-emerald-500/30 rounded-xl px-3.5 py-2 flex items-center justify-between gap-2 text-xs">
+            <div class="text-slate-300">
+              ✍️ ข่าวนี้จะระบุลงคลังงานว่าทำโดย: <strong id="form-creator-badge" class="text-emerald-300 font-bold">-</strong>
+            </div>
+            <button type="button" onclick="openNicknameModal()" class="text-[11px] text-amber-300 hover:underline font-medium shrink-0">
+              ✏️ เปลี่ยนชื่อเล่น
+            </button>
+          </div>
+
           <button id="submit-btn" type="submit"
             class="w-full py-3 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-sm shadow-lg shadow-emerald-500/20 transition flex items-center justify-center gap-2">
             <span>🚀 ส่งงานไปรันที่คอมเครื่องแม่</span>
@@ -280,32 +302,60 @@
 
       <!-- Toolbar -->
       <div class="bg-slate-900/90 border border-slate-800/90 rounded-2xl p-3 flex flex-wrap items-center justify-between gap-2.5">
-        <div class="flex items-center gap-1.5">
+        <div class="flex flex-wrap items-center gap-1.5">
           <button id="tab-all" onclick="setFilterMode('ALL')"
-            class="px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-500 text-slate-950 transition">
-            รายการทั้งหมด (<span id="count-all">0</span>)
+            class="px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-500 text-slate-950 shadow transition">
+            📋 คลังผลลัพธ์ข่าวที่ถอด (<span id="count-all">0</span>)
           </button>
           <button id="tab-mine" onclick="setFilterMode('MINE')"
             class="px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-800/80 text-slate-300 hover:bg-slate-700 transition">
-            งานของฉัน
+            👤 งานของ <span id="tab-mine-name">ฉัน</span> (<span id="count-mine">0</span>)
           </button>
         </div>
 
         <div class="flex items-center gap-2 flex-1 justify-end">
-          <input id="search-box" type="text" oninput="renderJobs()" placeholder="🔍 ค้นหาข่าว / คำสั่ง / พนักงาน..."
-            class="w-full max-w-[230px] bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500" />
-          <button onclick="collapseAll()" class="text-xs text-slate-400 hover:text-white bg-slate-800/70 hover:bg-slate-800 px-2.5 py-1.5 rounded-xl border border-slate-700/60 transition">
+          <input id="search-box" type="text" oninput="handleSearchInput()" placeholder="🔍 ค้นหาข่าวที่ถอด / ชื่อคนทำ..."
+            class="w-full max-w-[220px] bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500" />
+          <button id="btn-collapse-all" onclick="collapseAll()" class="text-xs text-slate-400 hover:text-white bg-slate-800/70 hover:bg-slate-800 px-2.5 py-1.5 rounded-xl border border-slate-700/60 transition">
             ย่อทั้งหมด
           </button>
         </div>
       </div>
 
-      <!-- Cases List -->
+      <!-- Cases List (Vault of Extracted News Results) -->
       <div id="jobs-container" class="space-y-2.5">
-        <div class="text-center py-12 text-slate-500 text-sm">กำลังโหลดรายการข่าว...</div>
+        <div class="text-center py-12 text-slate-500 text-sm">กำลังโหลดคลังผลลัพธ์ข่าวที่ถอด...</div>
       </div>
     </section>
   </main>
+
+  <!-- Nickname Entry Modal (Shown on first visit or when changing nickname) -->
+  <div id="nickname-modal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="w-full max-w-md bg-slate-900 border border-emerald-500/40 rounded-2xl p-6 shadow-2xl space-y-4" onclick="event.stopPropagation()">
+      <div class="flex items-center gap-3">
+        <div class="w-11 h-11 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-2xl shrink-0">
+          👋
+        </div>
+        <div>
+          <h3 class="text-base font-bold text-white">กรุณาใส่ชื่อเล่นของคุณก่อนใช้งาน</h3>
+          <p class="text-xs text-slate-400 mt-0.5">ระบบจะระบุชื่อเล่นของคุณลงในคลังงานว่าแต่ละข่าวทำโดยใคร</p>
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-emerald-300 mb-1.5">👤 ชื่อเล่นผู้ใช้งาน:</label>
+        <input id="nickname-modal-input" type="text"
+          placeholder="เช่น เมย์, บีม, นัด, ต้น..."
+          onkeydown="if(event.key==='Enter'){event.preventDefault(); confirmNicknameModal();}"
+          class="w-full bg-slate-950 border border-slate-700 focus:border-emerald-500 rounded-xl px-4 py-3 text-sm font-bold text-white placeholder-slate-500 focus:outline-none" />
+      </div>
+
+      <button type="button" onclick="confirmNicknameModal()"
+        class="w-full py-3 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-sm shadow-lg shadow-emerald-500/20 transition">
+        ✅ บันทึกชื่อเล่นและเข้าสู่ระบบ
+      </button>
+    </div>
+  </div>
 
   <!-- Image Lightbox Modal -->
   <div id="img-modal" onclick="closeImageModal()" class="hidden fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4">
@@ -318,50 +368,283 @@
     </div>
   </div>
 
+  <!-- Batch 5-Story 1+2+1 Copy Modal -->
+  <div id="batch-pack-modal" onclick="closeBatchPackModal()" class="hidden fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="w-full max-w-4xl max-h-[92vh] overflow-y-auto bg-slate-900 border border-amber-500/40 rounded-2xl p-5 shadow-2xl space-y-4" onclick="event.stopPropagation()">
+      <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
+        <div>
+          <h3 class="text-base font-bold text-amber-300">📦 คลังชุดข่าวน้ำดี โหมดกระชับ 1+2+1 (ก๊อบปี้ทีเดียว 5 ข่าว)</h3>
+          <p class="text-xs text-slate-400 mt-0.5">มาตรฐานโมเดลพี่ตูน 1,600M: ย่อหน้าแรกฮุคเข้าใจจบทั้งเรื่อง + ขยาย 2 ย่อหน้า + ปิดท้ายอินเนอร์ตัวละคร + แนบสรุปหัวข้อด้านล่าง</p>
+        </div>
+        <button type="button" onclick="closeBatchPackModal()" class="text-slate-400 hover:text-white text-xs font-bold px-3 py-1.5 rounded-lg bg-slate-800">✕ ปิด</button>
+      </div>
+
+      <!-- Pack Selector Buttons -->
+      <div id="batch-pack-tabs" class="flex flex-wrap gap-2"></div>
+
+      <!-- Single-Click Copy Block -->
+      <div class="bg-slate-950 border border-amber-500/30 rounded-xl p-4 space-y-2.5">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <span id="batch-pack-title" class="text-xs font-bold text-amber-300">ชุดที่ 1: คนดังสู้ชีวิต & ตอบแทนบ้านเกิด (5 ข่าว)</span>
+          <button type="button" onclick="copyBatchPackText()"
+            class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-4 py-1.5 rounded-xl text-xs shadow transition">
+            📋 ก๊อบปี้ทั้ง 5 ข่าวในคลิกเดียว (คั่นด้วยเส้นประ)
+          </button>
+        </div>
+        <pre id="batch-pack-text" class="max-h-64 overflow-y-auto bg-slate-900/90 border border-slate-800 rounded-xl p-3.5 text-slate-100 news-prose whitespace-pre-wrap text-xs"></pre>
+      </div>
+
+      <!-- Post-Block Topic Index -->
+      <div class="space-y-2">
+        <h4 class="text-xs font-bold text-emerald-300">📌 สรุปหัวข้อข่าว + รายละเอียดสำคัญ + พาดหัวปกฮุคมุมบวก (เรียงตามลำดับ 1–5):</h4>
+        <div id="batch-pack-index" class="space-y-2"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Updated Skills Reference Modal -->
+  <div id="skills-modal" onclick="closeSkillsModal()" class="hidden fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="w-full max-w-4xl max-h-[92vh] overflow-y-auto bg-slate-900 border border-violet-500/40 rounded-2xl p-5 shadow-2xl space-y-4" onclick="event.stopPropagation()">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div>
+          <h3 class="text-base font-bold text-violet-300">📚 สรุปสกิลล่าสุดที่อัปเดตลงระบบเว็บ (จากเซสชั่นหัวหน้าทีม + ชุดสกิลลูกเล่น)</h3>
+          <p class="text-xs text-slate-400 mt-0.5">พนักงานสามารถกดเลือกใช้ผ่านปุ่มบนหน้าเว็บ หรือพิมพ์สั่งในช่องความต้องการได้ทันที</p>
+        </div>
+        <button type="button" onclick="closeSkillsModal()" class="text-slate-400 hover:text-white text-xs font-bold px-3 py-1.5 rounded-lg bg-slate-800">✕ ปิด</button>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+        <div class="bg-slate-950 border border-amber-500/30 rounded-xl p-3.5 space-y-1.5">
+          <div class="font-bold text-amber-300">1. ⭐ โหมดเขียนกระชับ 1+2+1 (โมเดลพี่ตูน 1,600M)</div>
+          <p class="text-slate-300 leading-relaxed">• <strong>ย่อหน้า 1:</strong> ฮุคสรุปใจความสำคัญและตัวเลขให้เข้าใจจบทั้งเรื่องในย่อหน้าแรกทันที (ห้ามเกริ่นอ้อมค้อม)<br>• <strong>ย่อหน้า 2–3:</strong> ขยายที่มา/จุดสู้ชีวิต และดีเทลการลงมือทำจริงแบบกระชับ<br>• <strong>ย่อหน้า 4 (ท่อนปิดท้าย):</strong> ขมวดจบใส่อินเนอร์ความรู้สึกของตัวละครให้จบสวยและกินใจกว่ารายงานข่าวแห้งๆ</p>
+        </div>
+
+        <div class="bg-slate-950 border border-emerald-500/30 rounded-xl p-3.5 space-y-1.5">
+          <div class="font-bold text-emerald-300">2. 💚 สูตรที่ 9: บิดขุดความดีเงียบๆ สวนกระแสดราม่า</div>
+          <p class="text-slate-300 leading-relaxed">• เพิ่มใน <code>viral-news-spin</code> สำหรับขุดมุมน้ำดีที่คนยังไม่ค่อยรู้ของตัวละครในข่าวใหญ่ หรือคนดังสู้ชีวิต (เช่น เคยลำบากสลับรองเท้ากับยาย, ดูแลพ่อแม่ป่วยอัลไซเมอร์ติดเตียงด้วยตัวเอง, รวยร้อยล้านแต่ติดดินทำนา)</p>
+        </div>
+
+        <div class="bg-slate-950 border border-sky-500/30 rounded-xl p-3.5 space-y-1.5">
+          <div class="font-bold text-sky-300">3. 💡 ชุดสกิลที่ 6: สกิลลูกเล่นประยุกต์ข้อมูล (1+3+1)</div>
+          <p class="text-slate-300 leading-relaxed">• <code>news-skill-set-6-applied-hook</code>: รีเสิร์ชลึกแต่ไม่นำข้อมูลมาเรียงต่อกันทื่อๆ เปลี่ยนข้อมูลให้เป็น 5 ลูกเล่น (หักมุมตัวเลข, แกะรอยจากของ 1 ชิ้น, ถอดรหัสคำพูดสั้นๆ, ตัดสลับ 2 โลก, กฎเหล็กจากแผลในอดีต)</p>
+        </div>
+
+        <div class="bg-slate-950 border border-violet-500/30 rounded-xl p-3.5 space-y-1.5">
+          <div class="font-bold text-violet-300">4. 📝 คลัง 254 DNA Prompts + กฎปกข่าวฮุคมุมบวก</div>
+          <p class="text-slate-300 leading-relaxed">• โหมด <strong>ข่าวสั้น 3 ย่อหน้า</strong> จับคู่คลัง <code>viral-prompt-library</code> 254 การ์ดอัตโนมัติ<br>• <strong>พาดหัวปก 2 บรรทัด:</strong> ฮุคมุมบวกกินใจ และ <strong>ข่าวคนดังไม่ต้องใส่ป้ายชื่อมุมขวาล่าง</strong><br>• ก๊อบปี้หลายข่าวคั่นด้วยเส้นประ <code>--------------------------------------------------</code> พร้อมดัชนีสรุปหัวข้อด้านล่าง</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Toast Notification -->
   <div id="toast" class="hidden fixed bottom-5 right-5 z-50 bg-emerald-500 text-slate-950 font-semibold px-4 py-2.5 rounded-xl shadow-2xl text-xs"></div>
 
   <script>
     let selectedFiles = [];
     let allJobs = [];
+    let allTopics = [];
     let filterMode = 'ALL';
+    let topicStatusFilter = 'ALL';
     let dupTimeout = null;
     let expandedJobs = new Set();
     // Track per-article edit boxes with key `${jobId}:${idx}`
     let editingBoxes = new Set();
+    // Track selected style filter per jobId: 'ALL5' or 'skill_set_1'..'skill_set_6' (default 'skill_set_5')
+    let selectedJobStyle = {};
 
     const MODE_LABELS = {
+      toon_121: '⭐ กระชับ 1+2+1 (พี่ตูน 1,600M)',
       normal_1_spin_1: '🔥 มุมปกติ 1 + บิด 1',
       normal_1_spin_2: '⚡ มุมปกติ 1 + บิด 2',
       standard_4lock: '📰 มุมปกติ 1 ข่าว',
       spin_only_1: '🎯 บิดประเด็นล้วน 1',
-      viral_3_para: '📝 ข่าวสั้น 3 ย่อหน้า',
+      viral_3_para: '📝 ข่าวสั้น 3 ย่อหน้า (254 DNA)',
       strict_clip_only: '🎬 เฉพาะในคลิป 100%',
     };
 
     const SKILL_SET_LABELS = {
-      skill_set_1: '🕰️ ชุดสกิลที่ 1: ไทม์ไลน์อดีต',
-      skill_set_2: '⚖️ ชุดสกิลที่ 2: ผ่าข้อกฎหมาย/ระเบียบรัฐ',
-      skill_set_3: '⚡ ชุดสกิลที่ 3: จับคู่เทียบตัวเลข/ท่าที',
-      skill_set_4: '💬 ชุดสกิลที่ 4: เจาะรหัส 1 ประโยคขยี้ใจ',
-      skill_set_5: '⭐ ชุดสกิลที่ 5: ลูกผสม 3 มิติขั้นสุด',
+      all_5_styles: '🔥 ครบทั้ง 6 แบบ (พนักงานเลือกเอง)',
+      skill_set_1: '1️⃣ แบบที่ 1: ดีเทลตัวเลขครบ (1+3+1)',
+      skill_set_2: '2️⃣ แบบที่ 2: เปิดคำพูดจริง+แก้ปัญหา (1+3+1)',
+      skill_set_3: '3️⃣ แบบที่ 3: ซอย 4 จุดย่อยเก็บครบ (1+4+1)',
+      skill_set_4: '4️⃣ แบบที่ 4: หมัดหนักเทียบตัวเลข (1+2+1)',
+      skill_set_5: '⭐ แบบที่ 5: ไฮบริดเล่าลื่นข้อมูลแน่น (1+3+1)',
+      skill_set_6: '💡 แบบที่ 6: ลูกเล่นประยุกต์ข้อมูล (1+3+1)',
     };
 
     function getJobSkillSetTag(job) {
       const res = job?.result || {};
-      const sk = job?.skill_set || res.skill_set || 'skill_set_5';
-      return SKILL_SET_LABELS[sk] || res.skill_set_short || '⭐ ชุดสกิลที่ 5: ลูกผสม 3 มิติขั้นสุด';
+      const sk = job?.skill_set || res.skill_set || 'all_5_styles';
+      return SKILL_SET_LABELS[sk] || res.skill_set_short || '🔥 ครบทั้ง 6 แบบ (พนักงานเลือกเอง)';
     }
 
-    const savedEmp = localStorage.getItem('agy_employee_name');
-    if (savedEmp) {
-      document.getElementById('employee-name').value = savedEmp;
+    async function openBatchPackModal(packId = 'pack_celebrity_story') {
+      const modal = document.getElementById('batch-pack-modal');
+      if (modal) modal.classList.remove('hidden');
+      try {
+        const res = await fetch(`/api/batch-pack?pack_id=${encodeURIComponent(packId)}`);
+        const data = await res.json();
+        document.getElementById('batch-pack-title').textContent = data.pack_name || '';
+        document.getElementById('batch-pack-text').textContent = data.copy_block_text || '';
+        const tabsEl = document.getElementById('batch-pack-tabs');
+        if (tabsEl && Array.isArray(data.available_packs)) {
+          tabsEl.innerHTML = data.available_packs.map((p) => `
+            <button type="button" onclick="openBatchPackModal('${p.id}')"
+              class="px-3 py-1.5 rounded-xl text-xs font-bold border transition ${
+                p.id === data.pack_id
+                  ? 'bg-amber-400 text-slate-950 border-amber-300 shadow'
+                  : 'bg-slate-950 text-slate-300 border-slate-800 hover:border-slate-700'
+              }">
+              ${escapeHtml(p.name)}
+            </button>
+          `).join('');
+        }
+        const idxEl = document.getElementById('batch-pack-index');
+        if (idxEl && Array.isArray(data.topic_index)) {
+          idxEl.innerHTML = data.topic_index.map((item) => `
+            <div class="bg-slate-950/90 border border-slate-800 rounded-xl p-3 text-xs space-y-1">
+              <div class="font-bold text-white">${item.order}. ${escapeHtml(item.title)}</div>
+              <div class="text-slate-300 leading-relaxed">• <strong>รายละเอียด:</strong> ${escapeHtml(item.detail)}</div>
+              <div class="text-emerald-300">• <strong>พาดหัวปกฮุคมุมบวก (2 บรรทัด):</strong> "${escapeHtml(item.cover_line1)} / ${escapeHtml(item.cover_line2)}"</div>
+            </div>
+          `).join('');
+        }
+      } catch (e) {
+        showToast('❌ โหลดชุดข่าว 1+2+1 ไม่สำเร็จ');
+      }
+    }
+
+    function closeBatchPackModal() {
+      const modal = document.getElementById('batch-pack-modal');
+      if (modal) modal.classList.add('hidden');
+    }
+
+    function copyBatchPackText() {
+      const txt = (document.getElementById('batch-pack-text')?.textContent || '').trim();
+      if (!txt) return;
+      navigator.clipboard.writeText(txt);
+      showToast('📋 คัดลอกชุด 5 ข่าว (1+2+1) คั่นด้วยเส้นประเรียบร้อย!');
+    }
+
+    function openSkillsModal() {
+      const modal = document.getElementById('skills-modal');
+      if (modal) modal.classList.remove('hidden');
+    }
+
+    function closeSkillsModal() {
+      const modal = document.getElementById('skills-modal');
+      if (modal) modal.classList.add('hidden');
+    }
+
+    function countStats(text) {
+      const clean = (text || '').replace(/\s+/g, '');
+      const chars = clean.length;
+      const words = Math.max(1, Math.round(chars / 3.8));
+      const lines = (text || '').trim().split(/\n+/).filter(Boolean).length;
+      return { chars, words, lines };
+    }
+
+    function selectJobStyleTab(jobId, styleId, event) {
+      if (event) event.stopPropagation();
+      selectedJobStyle[jobId] = styleId;
+      renderJobs();
+    }
+
+    function isPlaceholderNickname(val) {
+      const v = (val || '').trim();
+      return !v || v === 'พนักงาน 1' || v === 'พนักงาน' || v === '-';
+    }
+
+    function syncNicknameUI(val) {
+      const clean = isPlaceholderNickname(val) ? '' : val.trim();
+      const disp = clean || 'ยังไม่ได้ใส่ชื่อเล่น';
+      const empInput = document.getElementById('employee-name');
+      if (empInput && empInput.value !== clean) {
+        empInput.value = clean;
+      }
+      const formBadge = document.getElementById('form-creator-badge');
+      if (formBadge) formBadge.textContent = disp;
+      const tabMineName = document.getElementById('tab-mine-name');
+      if (tabMineName) tabMineName.textContent = clean || 'ฉัน';
+      const badge = document.getElementById('current-emp-badge');
+      if (badge) badge.textContent = disp;
+    }
+
+    function openNicknameModal() {
+      const modal = document.getElementById('nickname-modal');
+      const inp = document.getElementById('nickname-modal-input');
+      const cur = (document.getElementById('employee-name').value || '').trim();
+      if (inp) {
+        inp.value = isPlaceholderNickname(cur) ? '' : cur;
+      }
+      if (modal) modal.classList.remove('hidden');
+      setTimeout(() => { if (inp) inp.focus(); }, 80);
+    }
+
+    function confirmNicknameModal() {
+      const inp = document.getElementById('nickname-modal-input');
+      const val = (inp ? inp.value : '').trim();
+      if (isPlaceholderNickname(val)) {
+        showToast('⚠️ กรุณาใส่ชื่อเล่นของคุณก่อนเข้าใช้งาน (เช่น เมย์, บีม, นัด)');
+        if (inp) inp.focus();
+        return;
+      }
+      localStorage.setItem('agy_employee_name', val);
+      localStorage.setItem('agy_nickname_confirmed', 'true');
+      syncNicknameUI(val);
+      const modal = document.getElementById('nickname-modal');
+      if (modal) modal.classList.add('hidden');
+      showToast(`👋 ยินดีต้อนรับคุณ "${val}"! ข่าวที่คุณถอดจะระบุชื่อ "${val}" ในคลังงานอัตโนมัติ`);
+      renderJobs();
     }
 
     function saveEmployeeName() {
-      const val = document.getElementById('employee-name').value.trim() || 'พนักงาน 1';
-      localStorage.setItem('agy_employee_name', val);
-      if (filterMode === 'MINE') renderJobs();
+      const val = document.getElementById('employee-name').value.trim();
+      if (!isPlaceholderNickname(val)) {
+        localStorage.setItem('agy_employee_name', val);
+        localStorage.setItem('agy_nickname_confirmed', 'true');
+      }
+      syncNicknameUI(val);
+      renderJobs();
+    }
+
+    const savedEmp = localStorage.getItem('agy_employee_name') || '';
+    const nickConfirmed = localStorage.getItem('agy_nickname_confirmed') === 'true';
+    if (!isPlaceholderNickname(savedEmp) && nickConfirmed) {
+      syncNicknameUI(savedEmp);
+    } else {
+      syncNicknameUI('');
+      setTimeout(() => openNicknameModal(), 120);
+    }
+
+    async function assignJobCreator(jobId, event) {
+      if (event) event.stopPropagation();
+      let myNick = (document.getElementById('employee-name').value || '').trim();
+      if (isPlaceholderNickname(myNick)) {
+        openNicknameModal();
+        return;
+      }
+      const prompted = prompt('ระบุชื่อเล่นผู้ทำข่าวนี้ในคลังงาน:', myNick);
+      if (!prompted || !prompted.trim()) return;
+      const newCreator = prompted.trim();
+      if (!isPlaceholderNickname(newCreator)) {
+        localStorage.setItem('agy_employee_name', newCreator);
+        localStorage.setItem('agy_nickname_confirmed', 'true');
+        syncNicknameUI(newCreator);
+      }
+      try {
+        const res = await fetch(`/api/jobs/${jobId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ employee_name: newCreator }),
+        });
+        if (!res.ok) throw new Error('อัปเดตชื่อผู้ทำไม่สำเร็จ');
+        showToast(`✅ ระบุในคลังงานแล้วว่าข่าวนี้ทำโดย "${newCreator}"!`);
+        await fetchJobs();
+      } catch (e) {
+        showToast('❌ ' + e.message);
+      }
     }
 
     function showToast(msg) {
@@ -384,13 +667,18 @@
     function selectOutputMode(mode) {
       document.getElementById('output-mode').value = mode;
       document.querySelectorAll('.mode-btn').forEach((btn) => {
-        const active = btn.getAttribute('data-mode') === mode;
+        const bMode = btn.getAttribute('data-mode');
+        const active = bMode === mode;
+        const isSpan2 = bMode === 'toon_121';
+        const spanCls = isSpan2 ? 'col-span-2 ' : '';
         btn.className = active
-          ? 'mode-btn text-left p-2.5 rounded-xl border transition bg-emerald-500/15 border-emerald-500 text-white shadow-sm'
-          : 'mode-btn text-left p-2.5 rounded-xl border transition bg-slate-950/70 border-slate-800 hover:border-slate-700 text-slate-200';
+          ? `mode-btn ${spanCls}text-left p-2.5 rounded-xl border transition bg-emerald-500/15 border-emerald-500 text-white shadow-sm`
+          : `mode-btn ${spanCls}text-left p-2.5 rounded-xl border transition bg-slate-950/70 ${isSpan2 ? 'border-amber-500/40 hover:border-amber-400' : 'border-slate-800 hover:border-slate-700'} text-slate-200`;
         const firstLine = btn.querySelector('div:first-child');
         if (firstLine) {
-          firstLine.className = active ? 'text-xs font-bold text-emerald-300' : 'text-xs font-bold';
+          firstLine.className = isSpan2
+            ? (active ? 'text-xs font-bold text-emerald-300 flex items-center justify-between' : 'text-xs font-bold flex items-center justify-between')
+            : (active ? 'text-xs font-bold text-emerald-300' : 'text-xs font-bold');
         }
       });
     }
@@ -400,15 +688,16 @@
       document.querySelectorAll('.skill-btn').forEach((btn) => {
         const s = btn.getAttribute('data-skill');
         const active = s === skill;
-        const isMain = s === 'skill_set_5';
-        if (isMain) {
+        const isAll5 = s === 'all_5_styles';
+        const isFullRow = isAll5 || s === 'skill_set_5';
+        if (isFullRow) {
           btn.className = active
-            ? 'skill-btn w-full text-left px-3 py-2 rounded-xl border transition bg-sky-500/15 border-sky-500 text-white shadow-sm'
+            ? 'skill-btn w-full text-left px-3 py-2.5 rounded-xl border transition bg-emerald-500/15 border-emerald-500 text-white shadow-sm'
             : 'skill-btn w-full text-left px-3 py-2 rounded-xl border transition bg-slate-950/70 border-slate-800 hover:border-slate-700 text-slate-200';
           const firstLine = btn.querySelector('div:first-child');
           if (firstLine) {
             firstLine.className = active
-              ? 'text-xs font-bold text-sky-300 flex items-center justify-between'
+              ? 'text-xs font-bold text-emerald-300 flex items-center justify-between'
               : 'text-xs font-bold flex items-center justify-between';
           }
         } else {
@@ -435,14 +724,20 @@
       const res = job?.result || {};
       if (Array.isArray(res.articles) && res.articles.length > 0) {
         return res.articles.map((a, idx) => ({
-          label: a.label || (idx === 0 ? 'มุมปกติ' : 'บิดประเด็น'),
+          idx,
+          style_id: a.style_id || a.skill_set || (res.articles.length >= 10 ? `skill_set_${Math.min(6, Math.floor(idx / 2) + 1)}` : 'skill_set_5'),
+          angle_type: a.angle_type || ((a.label || '').includes('บิด') ? 'spin' : 'normal'),
+          label: a.label || (idx % 2 === 0 ? 'มุมปกติ' : 'บิดประเด็น'),
           title: a.title || `${idx + 1}. ${a.label || 'เนื้อข่าว'}`,
           content: a.content || '',
         }));
       }
       if (res.raw_news) {
         return [{
-          label: job.output_mode === 'viral_3_para' ? 'ข่าวสั้น 3 ย่อหน้า' : 'มุมปกติ',
+          idx: 0,
+          style_id: 'skill_set_5',
+          angle_type: 'normal',
+          label: job.output_mode === 'toon_121' ? 'โหมด 1+2+1 (พี่ตูน 1,600M)' : (job.output_mode === 'viral_3_para' ? 'ข่าวสั้น 3 ย่อหน้า (254 DNA)' : 'มุมปกติ'),
           title: res.headline || 'เนื้อข่าวที่สรุปเสร็จสมบูรณ์',
           content: res.raw_news,
         }];
@@ -470,9 +765,9 @@
       if (articles.length === 0) return;
       const joined = articles.length === 1
         ? articles[0].content
-        : articles.map((a) => `${a.title}\n\n${a.content}`).join('\n\n────────────────────────\n\n');
+        : articles.map((a) => (a.content || '').trim()).join('\n\n--------------------------------------------------\n\n');
       navigator.clipboard.writeText(joined);
-      showToast(`📋 คัดลอกครบทั้ง ${articles.length} ข่าวเรียบร้อย!`);
+      showToast(`📋 คัดลอกครบทั้ง ${articles.length} ข่าว (คั่นด้วยเส้นประ) เรียบร้อย!`);
     }
 
     function reuseLinkForNewSpin(jobId, event) {
@@ -597,7 +892,7 @@
       document.getElementById('focus-instruction').value = '';
       document.getElementById('dup-alert').classList.add('hidden');
       selectOutputMode('normal_1_spin_1');
-      selectSkillSet('skill_set_5');
+      selectSkillSet('all_5_styles');
       selectedFiles = [];
       renderImagePreviews();
     }
@@ -632,12 +927,18 @@
 
     async function handleSubmit(e) {
       e.preventDefault();
-      const empName = document.getElementById('employee-name').value.trim() || 'พนักงาน';
+      const rawNick = document.getElementById('employee-name').value.trim();
+      if (isPlaceholderNickname(rawNick)) {
+        openNicknameModal();
+        showToast('⚠️ กรุณาใส่ชื่อเล่นของคุณก่อนส่งถอดข่าว เพื่อระบุลงคลังงานว่าใครเป็นคนทำ');
+        return;
+      }
+      const empName = rawNick;
       const urlsInput = document.getElementById('urls-input').value.trim();
       const rawText = document.getElementById('raw-text').value.trim();
       const focusInstruction = document.getElementById('focus-instruction').value.trim();
       const outputMode = document.getElementById('output-mode').value;
-      const skillSet = document.getElementById('skill-set').value || 'skill_set_5';
+      const skillSet = document.getElementById('skill-set').value || 'all_5_styles';
 
       if (!urlsInput && !rawText && selectedFiles.length === 0) {
         showToast('⚠️ กรุณาวางลิงก์, ข้อความ หรือแนบรูปภาพอย่างน้อย 1 อย่าง');
@@ -668,6 +969,7 @@
           expandedJobs.add(out.job_id);
         }
         clearForm();
+        setFilterMode('ALL');
         showToast('🚀 ส่งงานเข้าคิวคอมเครื่องแม่เรียบร้อย!');
         await fetchJobs();
       } catch (err) {
@@ -678,15 +980,269 @@
       }
     }
 
+    function handleSearchInput() {
+      renderJobs();
+    }
+
     function setFilterMode(mode) {
       filterMode = mode;
-      document.getElementById('tab-all').className = mode === 'ALL'
-        ? 'px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-500 text-slate-950 transition'
-        : 'px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-800/80 text-slate-300 hover:bg-slate-700 transition';
-      document.getElementById('tab-mine').className = mode === 'MINE'
-        ? 'px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-500 text-slate-950 transition'
-        : 'px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-800/80 text-slate-300 hover:bg-slate-700 transition';
+      const tabAll = document.getElementById('tab-all');
+      const tabMine = document.getElementById('tab-mine');
+
+      if (tabAll) {
+        tabAll.className = mode === 'ALL'
+          ? 'px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-500 text-slate-950 shadow transition'
+          : 'px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-800/80 text-slate-300 hover:bg-slate-700 transition';
+      }
+
+      if (tabMine) {
+        tabMine.className = mode === 'MINE'
+          ? 'px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-500 text-slate-950 shadow transition'
+          : 'px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-800/80 text-slate-300 hover:bg-slate-700 transition';
+      }
+
       renderJobs();
+    }
+
+    function setTopicStatusFilter(st) {
+      topicStatusFilter = st;
+      ['ALL', 'FREE', 'CLAIMED', 'MINE'].forEach((k) => {
+        const el = document.getElementById(`tfilter-${k}`);
+        if (!el) return;
+        if (k === st) {
+          el.className = 'px-2.5 py-1 rounded-lg font-bold bg-amber-400 text-slate-950 border border-amber-400 shadow-sm';
+        } else {
+          el.className = 'px-2.5 py-1 rounded-lg font-medium bg-slate-900 text-slate-300 border border-slate-800 hover:border-slate-700';
+        }
+      });
+      renderTopics();
+    }
+
+    function toggleAddTopicForm() {
+      const box = document.getElementById('add-topic-box');
+      if (box) box.classList.toggle('hidden');
+    }
+
+    async function submitNewTopic() {
+      const titleEl = document.getElementById('new-topic-title');
+      const linksEl = document.getElementById('new-topic-links');
+      const title = (titleEl.value || '').trim();
+      const linksText = (linksEl.value || '').trim();
+      if (!title) {
+        showToast('⚠️ กรุณาใส่ชื่อหัวข้อข่าว');
+        return;
+      }
+      try {
+        const res = await fetch('/api/topics', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title, links_text: linksText }),
+        });
+        if (!res.ok) throw new Error('บันทึกหัวข้อไม่สำเร็จ');
+        titleEl.value = '';
+        linksEl.value = '';
+        document.getElementById('add-topic-box').classList.add('hidden');
+        showToast('✅ เพิ่มหัวข้อข่าวใหม่ขึ้นเว็บเรียบร้อย!');
+        await fetchTopics();
+      } catch (e) {
+        showToast('❌ ' + e.message);
+      }
+    }
+
+    async function claimTopic(topicId, assignToMe, useInForm = false) {
+      let empName = '';
+      if (assignToMe) {
+        empName = (document.getElementById('employee-name').value || '').trim();
+        if (!empName || empName === 'พนักงาน 1') {
+          const prompted = prompt('กรุณาระบุชื่อของคุณ (เพื่อลงชื่อว่าใครรับข่าวนี้ไปทำ):', empName || '');
+          if (!prompted || !prompted.trim()) return;
+          empName = prompted.trim();
+          document.getElementById('employee-name').value = empName;
+          saveEmployeeName();
+        }
+      }
+
+      try {
+        const res = await fetch(`/api/topics/${topicId}/claim`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ employee_name: empName }),
+        });
+        if (!res.ok) throw new Error('อัปเดตสถานะไม่สำเร็จ');
+        await fetchTopics();
+
+        if (assignToMe && useInForm) {
+          const topic = allTopics.find((t) => t.id === topicId);
+          if (topic) {
+            const urlsStr = (topic.links || []).map((l) => l.url).join('\n');
+            document.getElementById('urls-input').value = urlsStr;
+            const focusTa = document.getElementById('focus-instruction');
+            focusTa.value = `หัวข้อ: ${topic.title}`;
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            showToast(`✅ ลงชื่อ "${empName}" และดึงลิงก์เข้าฟอร์มฝั่งซ้ายแล้ว!`);
+          }
+        } else if (assignToMe) {
+          showToast(`✅ ลงชื่อ "${empName}" รับหัวข้อนี้เรียบร้อย!`);
+        } else {
+          showToast('🔄 คืนสถานะหัวข้อนี้ให้ว่างแล้ว');
+        }
+      } catch (e) {
+        showToast('❌ ' + e.message);
+      }
+    }
+
+    async function deleteTopicItem(topicId, event) {
+      if (event) event.stopPropagation();
+      if (!confirm('ต้องการลบหัวข้อข่าวนี้ออกจากคลังใช่หรือไม่?')) return;
+      await fetch(`/api/topics/${topicId}`, { method: 'DELETE' });
+      await fetchTopics();
+      showToast('🗑️ ลบหัวข้อข่าวเรียบร้อย');
+    }
+
+    function renderTopics() {
+      const container = document.getElementById('topics-container');
+      if (!container) return;
+
+      const myName = (document.getElementById('employee-name').value || '').trim().toLowerCase();
+      const q = (document.getElementById('search-box').value || '').trim().toLowerCase();
+
+      const totalCount = allTopics.length;
+      const freeCount = allTopics.filter((t) => !(t.claimed_by || '').trim()).length;
+      const claimedCount = totalCount - freeCount;
+      const mineCount = allTopics.filter((t) => (t.claimed_by || '').trim().toLowerCase() === myName && myName !== '').length;
+
+      const elFreeTop = document.getElementById('count-topics-free');
+      const elTotalTop = document.getElementById('count-topics-total');
+      if (elFreeTop) elFreeTop.textContent = freeCount;
+      if (elTotalTop) elTotalTop.textContent = totalCount;
+
+      const elAll = document.getElementById('tcount-all');
+      const elFree = document.getElementById('tcount-free');
+      const elClaimed = document.getElementById('tcount-claimed');
+      const elMine = document.getElementById('tcount-mine');
+      if (elAll) elAll.textContent = totalCount;
+      if (elFree) elFree.textContent = freeCount;
+      if (elClaimed) elClaimed.textContent = claimedCount;
+      if (elMine) elMine.textContent = mineCount;
+
+      const filtered = allTopics.filter((t) => {
+        const isClaimed = Boolean((t.claimed_by || '').trim());
+        const isMine = isClaimed && (t.claimed_by || '').trim().toLowerCase() === myName;
+        if (topicStatusFilter === 'FREE' && isClaimed) return false;
+        if (topicStatusFilter === 'CLAIMED' && !isClaimed) return false;
+        if (topicStatusFilter === 'MINE' && !isMine) return false;
+
+        if (q) {
+          const hay = [
+            t.title,
+            t.claimed_by,
+            ...(t.links || []).map((l) => `${l.label} ${l.url}`),
+          ].join(' ').toLowerCase();
+          if (!hay.includes(q)) return false;
+        }
+        return true;
+      });
+
+      if (filtered.length === 0) {
+        container.innerHTML = `
+          <div class="bg-slate-900/50 border border-slate-800/80 rounded-2xl p-10 text-center text-slate-500 text-xs">
+            ไม่พบหัวข้อข่าวในหมวดที่เลือก
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = filtered.map((t, index) => {
+        const claimedBy = (t.claimed_by || '').trim();
+        const isClaimed = Boolean(claimedBy);
+        const numDisplay = t.order_no || (index + 1);
+        const linksHtml = (t.links || []).map((lnk) => `
+          <a href="${escapeHtml(lnk.url)}" target="_blank"
+            class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-sky-500/15 hover:bg-sky-500 text-sky-300 hover:text-slate-950 border border-sky-500/30 transition">
+            🔗 ${escapeHtml(lnk.label || 'เปิดต้นทาง')}
+          </a>
+        `).join('');
+
+        return `
+          <div class="rounded-2xl border px-4 py-3.5 transition ${
+            isClaimed
+              ? 'bg-slate-900/60 border-amber-500/35'
+              : 'bg-slate-900/95 hover:bg-slate-900 border-slate-800 hover:border-emerald-500/40'
+          }">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <!-- Left: Number + Headline + Source Links ONLY -->
+              <div class="space-y-2 flex-1 min-w-0">
+                <div class="flex items-start gap-2.5">
+                  <span class="shrink-0 w-6 h-6 rounded-lg text-xs font-bold flex items-center justify-center ${
+                    isClaimed ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                  }">
+                    ${numDisplay}
+                  </span>
+                  <h3 class="text-sm font-semibold leading-snug ${isClaimed ? 'text-slate-300' : 'text-white'}">
+                    ${escapeHtml(t.title)}
+                  </h3>
+                </div>
+
+                <!-- Source Links Row -->
+                <div class="flex flex-wrap items-center gap-2 pl-8">
+                  <span class="text-[11px] text-slate-400">ต้นทาง:</span>
+                  ${linksHtml || '<span class="text-xs text-slate-500">-</span>'}
+                </div>
+              </div>
+
+              <!-- Right: Claim Status & Action Buttons -->
+              <div class="flex flex-wrap sm:flex-col items-end justify-between gap-1.5 shrink-0 pl-8 sm:pl-0">
+                ${isClaimed ? `
+                  <div class="flex items-center gap-1.5 bg-amber-500/15 border border-amber-500/40 text-amber-300 px-3 py-1 rounded-xl text-xs font-bold">
+                    <span>👤 ${escapeHtml(claimedBy)} เลือกแล้ว</span>
+                    ${t.claimed_at ? `<span class="text-[10px] text-amber-200/70 font-normal">(${escapeHtml(formatShortTime(t.claimed_at))})</span>` : ''}
+                  </div>
+                  <div class="flex items-center gap-1.5">
+                    <button type="button" onclick="claimTopic('${t.id}', true, true)"
+                      class="px-2.5 py-1 rounded-lg text-[11px] bg-slate-800 hover:bg-emerald-500 text-slate-300 hover:text-slate-950 font-medium border border-slate-700 transition">
+                      ⚡ ดึงลิงก์เข้าฟอร์ม
+                    </button>
+                    <button type="button" onclick="claimTopic('${t.id}', false, false)"
+                      class="px-2 py-1 rounded-lg text-[11px] bg-slate-800 hover:bg-red-950 text-slate-400 hover:text-red-300 border border-slate-700 transition"
+                      title="ยกเลิกการจอง / คืนสถานะว่าง">
+                      ยกเลิกจอง
+                    </button>
+                    <button type="button" onclick="deleteTopicItem('${t.id}', event)"
+                      class="px-1.5 py-1 rounded-lg text-[11px] text-slate-500 hover:text-red-400" title="ลบหัวข้อนี้">
+                      🗑️
+                    </button>
+                  </div>
+                ` : `
+                  <div class="flex items-center gap-1.5">
+                    <button type="button" onclick="claimTopic('${t.id}', true, false)"
+                      class="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-3 py-1.5 rounded-xl text-xs shadow transition flex items-center gap-1">
+                      <span>✋ เลือกทำข่าวนี้ (ลงชื่อ)</span>
+                    </button>
+                    <button type="button" onclick="claimTopic('${t.id}', true, true)"
+                      class="bg-sky-500/20 hover:bg-sky-500 text-sky-300 hover:text-slate-950 border border-sky-500/40 font-semibold px-2.5 py-1.5 rounded-xl text-xs transition"
+                      title="ลงชื่อพร้อมดึงลิงก์ไปใส่ช่องสั่งทำข่าวฝั่งซ้ายทันที">
+                      🚀 เลือก + ส่งทำข่าว
+                    </button>
+                    <button type="button" onclick="deleteTopicItem('${t.id}', event)"
+                      class="px-1.5 py-1 rounded-lg text-[11px] text-slate-500 hover:text-red-400" title="ลบหัวข้อนี้">
+                      🗑️
+                    </button>
+                  </div>
+                `}
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    async function fetchTopics() {
+      try {
+        const res = await fetch('/api/topics');
+        const data = await res.json();
+        allTopics = data.topics || [];
+        renderTopics();
+      } catch (e) {}
     }
 
     async function deleteJob(jobId, event) {
@@ -746,10 +1302,16 @@
       if (activeId && activeId.startsWith('edit-box-')) return;
 
       const myName = (document.getElementById('employee-name').value || '').trim().toLowerCase();
+      const myCount = myName
+        ? allJobs.filter((j) => (j.employee_name || '').trim().toLowerCase() === myName).length
+        : 0;
+      const countMineEl = document.getElementById('count-mine');
+      if (countMineEl) countMineEl.textContent = myCount;
+
       const q = (document.getElementById('search-box').value || '').trim().toLowerCase();
 
       const filtered = allJobs.filter((j) => {
-        if (filterMode === 'MINE' && (j.employee_name || '').toLowerCase() !== myName) return false;
+        if (filterMode === 'MINE' && (j.employee_name || '').trim().toLowerCase() !== myName) return false;
         if (q) {
           const articlesText = getJobArticles(j).map((a) => `${a.title} ${a.content}`).join(' ');
           const hay = [
@@ -783,6 +1345,11 @@
         const shortTime = formatShortTime(j.created_at);
         const modeTag = MODE_LABELS[j.output_mode] || '📰 สรุปข่าว';
         const skillSetTag = getJobSkillSetTag(j);
+        const creatorName = (j.employee_name || '').trim() || 'ยังไม่ระบุชื่อ';
+        const isMine = myName && creatorName.toLowerCase() === myName;
+        const creatorBadgeCls = isMine
+          ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+          : 'bg-amber-500/15 text-amber-300 border-amber-500/35';
 
         // 1. Active / Queued Card
         if (!isDone && !isFailed) {
@@ -795,9 +1362,9 @@
                   <span class="text-xs font-semibold text-amber-300">${escapeHtml(j.progress_text || 'กำลังประมวลผล...')} (${j.progress_pct || 10}%)</span>
                 </div>
                 <div class="flex flex-wrap items-center gap-1.5 text-xs text-slate-400">
+                  <span class="px-2.5 py-0.5 rounded-lg border text-[11px] font-bold ${creatorBadgeCls}">✍️ ทำโดย: ${escapeHtml(creatorName)}</span>
                   <span class="px-2 py-0.5 rounded-md bg-sky-500/15 border border-sky-500/30 text-[11px] font-semibold text-sky-300">${escapeHtml(skillSetTag)}</span>
                   <span class="px-2 py-0.5 rounded-md bg-slate-800 text-[11px] text-slate-300">${escapeHtml(modeTag)}</span>
-                  <span class="text-emerald-300 font-medium">👤 ${escapeHtml(j.employee_name)}</span>
                   <span>• ${escapeHtml(shortTime)}</span>
                   <button onclick="deleteJob('${j.id}', event)" class="text-slate-500 hover:text-red-400 px-1" title="ยกเลิก/ลบ">✕</button>
                 </div>
@@ -821,7 +1388,7 @@
             <div id="job-card-${j.id}" class="bg-slate-900 border border-red-500/40 rounded-2xl px-4 py-3.5 flex flex-wrap items-center justify-between gap-3">
               <div class="min-w-0 flex-1">
                 <div class="text-xs font-bold text-red-300">⚠️ ${escapeHtml(j.progress_text || res.raw_news || 'เกิดข้อผิดพลาดในการประมวลผล')}</div>
-                <div class="text-[11px] text-sky-300 mt-0.5">${escapeHtml(skillSetTag)}</div>
+                <div class="text-[11px] text-sky-300 mt-0.5">✍️ ทำโดย: ${escapeHtml(creatorName)} • ${escapeHtml(skillSetTag)}</div>
                 ${j.focus_instruction ? `<div class="text-[11px] text-slate-400 mt-0.5 truncate">💬 คำสั่ง: ${escapeHtml(j.focus_instruction)}</div>` : ''}
               </div>
               <div class="flex items-center gap-2 shrink-0">
@@ -846,19 +1413,17 @@
         if (!isExpanded) {
           return `
             <div id="job-card-${j.id}" onclick="toggleExpandJob('${j.id}')"
-              class="group bg-slate-900/85 hover:bg-slate-800/80 border border-slate-800/90 hover:border-slate-700 rounded-2xl px-4 py-3.5 cursor-pointer transition flex items-center justify-between gap-3">
+              class="group bg-slate-900/85 hover:bg-slate-800/80 border border-slate-800/90 hover:border-slate-700 rounded-2xl px-4 py-3.5 cursor-pointer transition flex flex-wrap sm:flex-nowrap items-center justify-between gap-3">
               <div class="min-w-0 flex-1">
                 <div class="flex flex-wrap items-center gap-2 mb-0.5">
                   <span class="text-emerald-400 text-xs">●</span>
                   <h3 class="text-sm font-semibold text-slate-100 group-hover:text-white truncate">${escapeHtml(headline)}</h3>
+                  <span class="shrink-0 px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${creatorBadgeCls}">
+                    ✍️ ทำโดย: ${escapeHtml(creatorName)}
+                  </span>
                   <span class="shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-500/15 text-sky-300 border border-sky-500/30">
                     ${escapeHtml(skillSetTag)}
                   </span>
-                  ${articles.length > 1 ? `
-                    <span class="shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold bg-violet-500/20 text-violet-300 border border-violet-500/30">
-                      ${articles.length} ข่าว
-                    </span>
-                  ` : ''}
                 </div>
                 <p class="text-xs text-slate-400 truncate pl-4">
                   ${j.focus_instruction ? `<span class="text-violet-300 font-medium">[สั่ง: ${escapeHtml(j.focus_instruction.slice(0, 45))}]</span> ` : ''}${escapeHtml(previewSnippet)}...
@@ -866,9 +1431,11 @@
               </div>
 
               <div class="flex items-center gap-2 shrink-0">
-                <span class="hidden sm:inline-block px-2 py-0.5 rounded-lg text-[11px] bg-slate-800 text-slate-300 border border-slate-700/70">
-                  👤 ${escapeHtml(j.employee_name)}
-                </span>
+                <button onclick="assignJobCreator('${j.id}', event)"
+                  class="px-2 py-1 rounded-lg text-[11px] bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition"
+                  title="คลิกเพื่อระบุหรือเปลี่ยนชื่อคนทำข่าวนี้">
+                  ✏️ เปลี่ยนชื่อคนทำ
+                </button>
                 <span class="hidden md:inline-block text-[11px] text-slate-500 w-14 text-right">${escapeHtml(shortTime)}</span>
                 <button onclick="copyAllJobArticles('${j.id}', event)"
                   class="bg-emerald-500/15 hover:bg-emerald-500 text-emerald-300 hover:text-slate-950 border border-emerald-500/30 font-semibold px-2.5 py-1 rounded-xl text-xs transition"
@@ -892,9 +1459,50 @@
         const upImgs = res.uploaded_images || [];
         const allMedia = [...upImgs, ...sheets];
 
-        const articlesHtml = articles.map((art, idx) => {
+        const distinctStyles = Array.from(new Set(articles.map((a) => a.style_id).filter(Boolean)));
+        const hasMultiStyles = distinctStyles.length > 1;
+        const activeStyleFilter = selectedJobStyle[j.id] || (hasMultiStyles ? 'skill_set_5' : 'ALL5');
+        const visibleArticles = (hasMultiStyles && activeStyleFilter !== 'ALL5')
+          ? articles.filter((a) => a.style_id === activeStyleFilter)
+          : articles;
+
+        const styleTabsBarHtml = hasMultiStyles ? `
+          <div class="bg-slate-950/90 border border-emerald-500/30 rounded-xl p-3 space-y-2">
+            <div class="flex flex-wrap items-center justify-between gap-2 text-xs">
+              <span class="font-bold text-emerald-300">🎛️ เลือกแบบสกิลข่าวที่ต้องการหยิบไปใช้ (มีครบทุกแบบ):</span>
+            </div>
+            <div class="flex flex-wrap gap-1.5">
+              ${['skill_set_1', 'skill_set_2', 'skill_set_3', 'skill_set_4', 'skill_set_5', 'skill_set_6'].map((sid) => {
+                const isSel = activeStyleFilter === sid;
+                return `
+                  <button type="button" onclick="selectJobStyleTab('${j.id}', '${sid}', event)"
+                    class="px-2.5 py-1.5 rounded-lg text-xs border transition ${
+                      isSel
+                        ? 'bg-emerald-500 text-slate-950 font-bold border-emerald-400 shadow'
+                        : 'bg-slate-900 hover:bg-slate-800 text-slate-200 border-slate-700'
+                    }">
+                    ${escapeHtml(SKILL_SET_LABELS[sid] || sid)}
+                  </button>
+                `;
+              }).join('')}
+              <button type="button" onclick="selectJobStyleTab('${j.id}', 'ALL5', event)"
+                class="px-2.5 py-1.5 rounded-lg text-xs border transition ${
+                  activeStyleFilter === 'ALL5'
+                    ? 'bg-amber-400 text-slate-950 font-bold border-amber-300 shadow'
+                    : 'bg-slate-900 hover:bg-slate-800 text-amber-300 border-amber-500/40'
+                }">
+                👁️ ดูครบทุกแบบ (${articles.length} กล่อง)
+              </button>
+            </div>
+          </div>
+        ` : '';
+
+        const articlesHtml = visibleArticles.map((art) => {
+          const idx = art.idx;
           const isEditingThis = editingBoxes.has(`${j.id}:${idx}`);
           const badgeCls = getBadgeStyle(art.label);
+          const stat = countStats(art.content);
+          const artStyleTag = SKILL_SET_LABELS[art.style_id] || skillSetTag;
           return `
             <div class="bg-slate-950/85 border border-slate-800 rounded-xl overflow-hidden">
               <div class="bg-slate-900/90 px-4 py-2.5 border-b border-slate-800/90 flex flex-wrap items-center justify-between gap-2">
@@ -903,7 +1511,10 @@
                     ${escapeHtml(art.label)}
                   </span>
                   <span class="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-sky-500/15 text-sky-300 border border-sky-500/30">
-                    ${escapeHtml(skillSetTag)}
+                    ${escapeHtml(artStyleTag)}
+                  </span>
+                  <span class="px-2 py-0.5 rounded-md text-[10px] bg-slate-800 text-emerald-300 border border-slate-700">
+                    📏 ~${stat.words} คำ • ${stat.lines} บรรทัด
                   </span>
                   <span class="text-xs font-semibold text-slate-200 truncate">${escapeHtml(art.title)}</span>
                 </div>
@@ -948,11 +1559,16 @@
                 <h3 class="text-sm sm:text-base font-bold text-white leading-snug">${escapeHtml(headline)}</h3>
               </div>
               <div class="flex flex-wrap items-center gap-1.5 shrink-0" onclick="event.stopPropagation()">
+                <span class="px-2.5 py-0.5 rounded-lg text-[11px] font-bold border ${creatorBadgeCls}">
+                  ✍️ ทำโดย: ${escapeHtml(creatorName)} ${shortTime ? `• ${escapeHtml(shortTime)}` : ''}
+                </span>
+                <button onclick="assignJobCreator('${j.id}', event)"
+                  class="px-2 py-0.5 rounded-lg text-[11px] bg-slate-900 hover:bg-slate-700 text-slate-300 border border-slate-700 transition"
+                  title="คลิกเพื่อระบุหรือเปลี่ยนชื่อคนทำข่าวนี้">
+                  ✏️ เปลี่ยนชื่อคนทำ
+                </button>
                 <span class="px-2 py-0.5 rounded-lg text-[11px] bg-sky-500/15 text-sky-300 border border-sky-500/30 font-semibold">
                   ${escapeHtml(skillSetTag)}
-                </span>
-                <span class="px-2 py-0.5 rounded-lg text-[11px] bg-slate-900 text-emerald-300 border border-slate-700">
-                  👤 ${escapeHtml(j.employee_name)} • ${escapeHtml(shortTime)}
                 </span>
                 ${(j.urls && j.urls.length > 0) ? `
                   <button onclick="reuseLinkForNewSpin('${j.id}', event)"
@@ -995,6 +1611,9 @@
                   </div>
                 </div>
               ` : ''}
+
+              <!-- 5-Style Selector Bar (when job has all 5 styles) -->
+              ${styleTabsBarHtml}
 
               <!-- Individual News Boxes -->
               <div class="space-y-3.5">
@@ -1101,9 +1720,73 @@
 
     async function fetchJobs() {
       try {
-        const res = await fetch('/api/jobs');
-        const data = await res.json();
-        allJobs = data.jobs || [];
+        const [jobsRes, readyRes] = await Promise.all([
+          fetch('/api/jobs'),
+          fetch('/api/ready-posts').catch(() => null),
+        ]);
+        const data = await jobsRes.json();
+        const jobsList = data.jobs || [];
+        const existingIds = new Set(jobsList.map((j) => j.id));
+        const existingHeadlines = new Set(
+          jobsList.map((j) => (j.result?.headline || '').trim()).filter(Boolean)
+        );
+
+        if (readyRes && readyRes.ok) {
+          const rData = await readyRes.json();
+          const posts = rData.posts || [];
+          posts.forEach((p) => {
+            const pid = p.id || '';
+            const pTitle = (p.topic_title || '').trim();
+            if (!pid || existingIds.has(pid) || existingIds.has(`vault_${pid}`) || existingHeadlines.has(pTitle)) {
+              return;
+            }
+            const flatArticles = [];
+            if (Array.isArray(p.style_variants) && p.style_variants.length > 0) {
+              p.style_variants.forEach((sv) => {
+                (sv.items || []).forEach((it) => {
+                  flatArticles.push({
+                    style_id: sv.style_id || 'skill_set_5',
+                    angle_type: (it.type || '').includes('บิด') ? 'spin' : 'normal',
+                    label: it.type || 'มุมปกติ',
+                    title: it.title || pTitle,
+                    content: it.content || '',
+                  });
+                });
+              });
+            } else if (Array.isArray(p.items)) {
+              p.items.forEach((it) => {
+                flatArticles.push({
+                  style_id: 'skill_set_5',
+                  angle_type: (it.type || '').includes('บิด') ? 'spin' : 'normal',
+                  label: it.type || 'มุมปกติ',
+                  title: it.title || pTitle,
+                  content: it.content || '',
+                });
+              });
+            }
+            jobsList.push({
+              id: pid,
+              status: 'completed',
+              employee_name: p.employee_name || 'คลังข่าวพร้อมโพสต์',
+              created_at: p.created_at || '',
+              output_mode: 'normal_1_spin_1',
+              skill_set: 'all_5_styles',
+              urls: (p.source_links || []).map((l) => l.url).filter(Boolean),
+              focus_instruction: p.cover_headline ? `พาดหัวปก: ${p.cover_headline}` : '',
+              result: {
+                headline: p.topic_num ? `[ข่าวที่ ${p.topic_num}] ${pTitle}` : pTitle,
+                skill_set: 'all_5_styles',
+                articles: flatArticles,
+                uploaded_images: p.cover_url ? [p.cover_url] : [],
+                audit_tag: '✅ ถอดครบทั้ง 5 แบบสกิล (พร้อมปกข่าว 1080x1350)',
+              },
+            });
+            existingIds.add(pid);
+            if (pTitle) existingHeadlines.add(pTitle);
+          });
+        }
+
+        allJobs = jobsList;
         renderJobs();
       } catch (e) {}
     }

@@ -20,7 +20,7 @@ def now_th() -> datetime.datetime:
     return datetime.datetime.now(TH_TZ)
 
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -30,6 +30,10 @@ from supabase_client import (
     get_job_from_supabase,
     list_jobs_from_supabase,
     delete_job_from_supabase,
+    save_topic_to_supabase,
+    get_topic_from_supabase,
+    list_topics_from_supabase,
+    delete_topic_from_supabase,
     update_host_heartbeat,
     get_host_heartbeat,
 )
@@ -77,7 +81,7 @@ def parse_chat_style_submission(
     raw_text: str,
     focus_instruction: str,
     output_mode: str,
-    skill_set: str = "skill_set_5",
+    skill_set: str = "all_5_styles",
 ):
     """Allow pasting 'ทำข่าวนี้มุมปกติ 1 ข่าว บิดประเด็น 1 ข่าว ขอแนว... https://...' in one box."""
     urls = extract_urls_from_text(urls_input)
@@ -93,21 +97,20 @@ def parse_chat_style_submission(
 
     # Smart auto-detect mode if employee wrote explicit multi-angle instructions in chat style
     low_focus = merged_focus.lower()
-    if "3 ย่อหน้า" in low_focus or "สามย่อหน้า" in low_focus:
+    if any(k in low_focus for k in ("1+2+1", "พี่ตูน", "เข้าใจจบในย่อหน้าแรก", "ฮุคจบในย่อหน้าแรก")):
+        output_mode = "toon_121"
+    elif "3 ย่อหน้า" in low_focus or "สามย่อหน้า" in low_focus or "254" in low_focus:
         output_mode = "viral_3_para"
     elif ("บิดประเด็น 2" in low_focus or "บิด 2" in low_focus or "บิดประเด็น2" in low_focus) and "ปกติ" in low_focus:
         output_mode = "normal_1_spin_2"
     elif "ปกติ" in low_focus and "บิด" in low_focus and output_mode == "standard_4lock":
         output_mode = "normal_1_spin_1"
 
-    # Auto-detect skill_set if employee explicitly typed ชุดสกิลที่ 1..5 or วิธีที่ 1..5 in text
-    for num in ("1", "2", "3", "4", "5"):
-        if f"ชุดสกิลที่ {num}" in low_focus or f"ชุดสกิลที่{num}" in low_focus or f"วิธีที่ {num}" in low_focus or f"วิธีที่{num}" in low_focus:
-            skill_set = f"skill_set_{num}"
-            break
-
-    if skill_set not in ("skill_set_1", "skill_set_2", "skill_set_3", "skill_set_4", "skill_set_5"):
-        skill_set = "skill_set_5"
+    # Always output all 6 styles per news story unless employee explicitly picked a single skill set
+    if any(k in low_focus for k in ("สกิลลูกเล่น", "ชุดสกิลที่ 6", "แบบที่ 6", "บิดแบบลูกเล่น")):
+        skill_set = "skill_set_6"
+    elif not skill_set or skill_set == "all_5_styles":
+        skill_set = "all_5_styles"
 
     return urls, merged_focus, output_mode, skill_set
 
@@ -143,6 +146,18 @@ def init_db():
         conn.execute("ALTER TABLE jobs ADD COLUMN skill_set TEXT DEFAULT 'skill_set_5'")
     except Exception:
         pass
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS evergreen_topics (
+            id TEXT PRIMARY KEY,
+            order_no INTEGER DEFAULT 999,
+            title TEXT,
+            category TEXT,
+            links_json TEXT,
+            claimed_by TEXT DEFAULT '',
+            claimed_at TEXT DEFAULT '',
+            created_at TEXT
+        )
+    """)
     conn.commit()
     conn.close()
 
@@ -264,7 +279,7 @@ async def background_worker(
     focus_instruction: str,
     output_mode: str,
     image_files: List[str],
-    skill_set: str = "skill_set_5",
+    skill_set: str = "all_5_styles",
 ):
     import importlib
     import processor
@@ -295,7 +310,7 @@ async def background_worker(
                 skill_set=skill_set,
             )
             result = await asyncio.to_thread(upload_job_media_to_cloud, job_id, job_dir, result)
-            await asyncio.to_thread(update_job_progress, job_id, "completed", "สรุปเนื้อข่าวเสร็จสมบูรณ์!", 100, result)
+            await asyncio.to_thread(update_job_progress, job_id, "completed", "สรุปเนื้อข่าวครบทั้ง 5 แบบเรียบร้อย!", 100, result)
         except Exception as e:
             s_err = str(e)
             if isinstance(e, subprocess.TimeoutExpired) or "timed out" in s_err.lower():
@@ -408,6 +423,11 @@ async def index():
     return index_file.read_text(encoding="utf-8")
 
 
+@app.get("/ready")
+async def ready_page():
+    return RedirectResponse(url="/")
+
+
 @app.get("/api/system-info")
 async def system_info():
     if IS_VERCEL:
@@ -497,7 +517,7 @@ async def submit_job(
     raw_text: str = Form(""),
     focus_instruction: str = Form(""),
     output_mode: str = Form("normal_1_spin_1"),
-    skill_set: str = Form("skill_set_5"),
+    skill_set: str = Form("all_5_styles"),
     images: List[UploadFile] = File(default=[]),
 ):
     urls, focus_instruction, output_mode, skill_set = parse_chat_style_submission(
@@ -655,6 +675,7 @@ class UpdateJobBody(BaseModel):
     raw_news: Optional[str] = None
     headline: Optional[str] = None
     articles: Optional[List[dict]] = None
+    employee_name: Optional[str] = None
 
 
 def _rebuild_raw_news_from_articles(articles: List[dict]) -> str:
@@ -681,6 +702,8 @@ async def update_job_text(job_id: str, body: UpdateJobBody):
             res["raw_news"] = body.raw_news
         if body.headline:
             res["headline"] = body.headline
+        if body.employee_name is not None and body.employee_name.strip():
+            j["employee_name"] = body.employee_name.strip()
         j["result"] = res
         await asyncio.to_thread(save_job_to_supabase, j)
         return {"ok": True}
@@ -698,7 +721,13 @@ async def update_job_text(job_id: str, body: UpdateJobBody):
         res["raw_news"] = body.raw_news
     if body.headline:
         res["headline"] = body.headline
-    conn.execute("UPDATE jobs SET result_json = ? WHERE id = ?", (json.dumps(res, ensure_ascii=False), job_id))
+    if body.employee_name is not None and body.employee_name.strip():
+        conn.execute(
+            "UPDATE jobs SET result_json = ?, employee_name = ? WHERE id = ?",
+            (json.dumps(res, ensure_ascii=False), body.employee_name.strip(), job_id),
+        )
+    else:
+        conn.execute("UPDATE jobs SET result_json = ? WHERE id = ?", (json.dumps(res, ensure_ascii=False), job_id))
     conn.commit()
     conn.close()
     await asyncio.to_thread(sync_row_to_supabase, job_id)
@@ -757,3 +786,150 @@ async def delete_job(job_id: str):
     conn.close()
     await asyncio.to_thread(delete_job_from_supabase, job_id)
     return {"ok": True}
+
+
+# ==============================================================================
+# EVERGREEN NEWS TOPICS POOL (คลังหัวข้อข่าวให้น้องพนักงานกดเลือกรับงาน + ลงชื่อ)
+# ==============================================================================
+
+class TopicClaimBody(BaseModel):
+    employee_name: str = ""
+
+
+class TopicCreateBody(BaseModel):
+    title: str
+    category: str = "ดาราติดดิน / สู้ชีวิต"
+    links_text: str = ""
+    links: Optional[List[dict]] = None
+    order_no: Optional[int] = None
+
+
+def _upsert_local_topic(t: dict):
+    if IS_VERCEL:
+        return
+    try:
+        conn = get_db()
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO evergreen_topics (id, order_no, title, category, links_json, claimed_by, claimed_at, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                t["id"],
+                int(t.get("order_no") or 999),
+                t.get("title", ""),
+                t.get("category", ""),
+                json.dumps(t.get("links") or [], ensure_ascii=False),
+                t.get("claimed_by") or "",
+                t.get("claimed_at") or "",
+                t.get("created_at") or "",
+            ),
+        )
+        conn.commit()
+        conn.close()
+    except Exception:
+        pass
+
+
+@app.get("/api/topics")
+async def api_list_topics():
+    topics = await asyncio.to_thread(list_topics_from_supabase, 300)
+    if topics:
+        if not IS_VERCEL:
+            for t in topics:
+                _upsert_local_topic(t)
+        return {"topics": topics}
+
+    if not IS_VERCEL:
+        conn = get_db()
+        rows = conn.execute("SELECT * FROM evergreen_topics ORDER BY order_no ASC, created_at ASC").fetchall()
+        conn.close()
+        out = []
+        for r in rows:
+            d = dict(r)
+            d["links"] = json.loads(d.get("links_json") or "[]")
+            d.pop("links_json", None)
+            out.append(d)
+        return {"topics": out}
+
+    return {"topics": []}
+
+
+@app.post("/api/topics")
+async def api_create_topic(body: TopicCreateBody):
+    title = (body.title or "").strip()
+    if not title:
+        raise HTTPException(status_code=400, detail="กรุณาระบุชื่อหัวข้อข่าว")
+
+    links_list = []
+    if body.links:
+        links_list = body.links
+    elif body.links_text:
+        extracted = extract_urls_from_text(body.links_text)
+        for idx, u in enumerate(extracted):
+            lbl = "คลิป YouTube" if ("youtube.com" in u or "youtu.be" in u) else (f"ต้นทาง {idx + 1}" if len(extracted) > 1 else "ลิงก์ต้นทาง")
+            links_list.append({"label": lbl, "url": u})
+
+    existing = await asyncio.to_thread(list_topics_from_supabase, 300)
+    max_no = max([int(x.get("order_no") or 0) for x in existing], default=0)
+    order_no = body.order_no if body.order_no is not None else (max_no + 1)
+
+    now_str = now_th().strftime("%Y-%m-%d %H:%M:%S")
+    topic_id = "topic_" + now_th().strftime("%Y%m%d_%H%M%S_") + uuid.uuid4().hex[:4]
+    topic_doc = {
+        "id": topic_id,
+        "order_no": order_no,
+        "title": title,
+        "category": (body.category or "ดาราติดดิน / สู้ชีวิต").strip(),
+        "links": links_list,
+        "claimed_by": "",
+        "claimed_at": "",
+        "created_at": now_str,
+    }
+    await asyncio.to_thread(save_topic_to_supabase, topic_doc)
+    _upsert_local_topic(topic_doc)
+    return {"ok": True, "topic": topic_doc}
+
+
+@app.post("/api/topics/{topic_id}/claim")
+async def api_claim_topic(topic_id: str, body: TopicClaimBody):
+    emp = (body.employee_name or "").strip()
+    t = await asyncio.to_thread(get_topic_from_supabase, topic_id)
+    if not t and not IS_VERCEL:
+        conn = get_db()
+        r = conn.execute("SELECT * FROM evergreen_topics WHERE id = ?", (topic_id,)).fetchone()
+        conn.close()
+        if r:
+            d = dict(r)
+            d["links"] = json.loads(d.get("links_json") or "[]")
+            d.pop("links_json", None)
+            t = d
+
+    if not t:
+        raise HTTPException(status_code=404, detail="ไม่พบหัวข้อข่าวนี้")
+
+    now_str = now_th().strftime("%Y-%m-%d %H:%M:%S") if emp else ""
+    t["claimed_by"] = emp
+    t["claimed_at"] = now_str
+
+    await asyncio.to_thread(save_topic_to_supabase, t)
+    _upsert_local_topic(t)
+    return {"ok": True, "topic": t}
+
+
+@app.delete("/api/topics/{topic_id}")
+async def api_delete_topic(topic_id: str):
+    await asyncio.to_thread(delete_topic_from_supabase, topic_id)
+    if not IS_VERCEL:
+        conn = get_db()
+        conn.execute("DELETE FROM evergreen_topics WHERE id = ?", (topic_id,))
+        conn.commit()
+        conn.close()
+    return {"ok": True}
+
+
+@app.get("/api/batch-pack")
+async def api_batch_pack(pack_id: str = "pack_celebrity_story"):
+    from curated_packs_hub import build_batch_copy_payload
+    return build_batch_copy_payload(pack_id=pack_id)
+
