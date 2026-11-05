@@ -542,6 +542,65 @@ async def run_subprocess(cmd: List[str], cwd: Path, timeout: int = 180) -> subpr
     )
 
 
+def _run_agy_sync_with_watcher(cmd: List[str], cwd: Path, result_json_path: Path, timeout: int = 480) -> subprocess.CompletedProcess:
+    """Run agy.exe and watch for result.json creation so we return immediately once write_file completes."""
+    import time
+    env = os.environ.copy()
+    env["PYTHONIOENCODING"] = "utf-8"
+    proc = subprocess.Popen(
+        cmd,
+        cwd=str(cwd),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        env=env,
+    )
+    start_ts = time.time()
+    last_stable_check = 0.0
+    while True:
+        ret = proc.poll()
+        if ret is not None:
+            out, err = proc.communicate()
+            return subprocess.CompletedProcess(cmd, ret, out, err)
+
+        now = time.time()
+        elapsed = now - start_ts
+        if elapsed > timeout:
+            try:
+                proc.kill()
+            except Exception:
+                pass
+            raise subprocess.TimeoutExpired(cmd, timeout)
+
+        if now - last_stable_check >= 1.2 and result_json_path.exists():
+            last_stable_check = now
+            try:
+                if result_json_path.stat().st_size > 200:
+                    time.sleep(0.6)
+                    with open(result_json_path, "r", encoding="utf-8") as f:
+                        parsed = json.load(f)
+                    if isinstance(parsed, dict) and (parsed.get("articles") or parsed.get("raw_news")):
+                        try:
+                            proc.terminate()
+                            proc.wait(timeout=3)
+                        except Exception:
+                            try:
+                                proc.kill()
+                            except Exception:
+                                pass
+                        return subprocess.CompletedProcess(cmd, 0, "SAVED_OK", "")
+            except Exception:
+                pass
+
+        time.sleep(0.5)
+
+
+async def run_agy_with_result_watcher(cmd: List[str], cwd: Path, result_json_path: Path, timeout: int = 480) -> subprocess.CompletedProcess:
+    return await asyncio.to_thread(_run_agy_sync_with_watcher, cmd, cwd, result_json_path, timeout)
+
+
 async def process_job(
     job_id: str,
     job_dir: Path,
@@ -701,7 +760,7 @@ async def process_job(
 
     progress_cb(f"AI กำลังรัน {s_info['short_tag']} (ค้นข้อมูล & เขียนข่าว)...", 65)
 
-    # Load Skill Guides into SKILL_GUIDES.md
+    # Load Skill Guides into SKILL_GUIDES.md (kept compact < 40KB so agy.exe reads it in 1 single read_file call without truncation)
     writer_skill_path = Path(r"C:\Users\User\.gemini\config\skills\viral-news-writer\SKILL.md")
     digest_skill_path = Path(r"C:\Users\User\.gemini\config\skills\viral-news-digest\SKILL.md")
     spin_skill_path = Path(r"C:\Users\User\.gemini\config\skills\viral-news-spin\SKILL.md")
@@ -709,31 +768,33 @@ async def process_job(
     guides_parts: List[str] = []
 
     if s_info["id"] == "all_5_styles":
+        summary_lines = ["=== สรุปโครงสร้างทั้ง 6 ชุดสกิล (ใช้ข้อเท็จจริงชุดเดียวกัน จัด 6 โครงสร้าง) ==="]
         for snum in range(1, 7):
             sub_info = SKILL_SET_REGISTRY[f"skill_set_{snum}"]
-            sp = Path(sub_info["skill_path"])
-            if sp.exists():
-                guides_parts.append(
-                    f"=== คู่มือ {sub_info['full_badge']} ===\n"
-                    + sp.read_text(encoding="utf-8")
-                )
+            summary_lines.append(f"\n### {sub_info['full_badge']}\n{sub_info['method_instruction']}")
+        guides_parts.append("\n".join(summary_lines))
+        sp6 = Path(SKILL_SET_REGISTRY["skill_set_6"]["skill_path"])
+        if sp6.exists():
+            guides_parts.append("=== คู่มือละเอียด ชุดสกิลที่ 6 (สกิลลูกเล่นประยุกต์ข้อมูล) ===\n" + sp6.read_text(encoding="utf-8")[:6500])
     else:
         selected_skill_path = Path(s_info["skill_path"])
         if selected_skill_path.exists():
             guides_parts.append(
                 f"=== คู่มือชุดสกิลที่เลือกใช้งาน: {s_info['full_badge']} ===\n"
-                + selected_skill_path.read_text(encoding="utf-8")
+                + selected_skill_path.read_text(encoding="utf-8")[:12000]
             )
 
     if digest_skill_path.exists():
-        guides_parts.append("=== คู่มือสกิล `viral-news-digest` (รวมโหมดกระชับ 1+2+1 โมเดลพี่ตูน 1,600M) ===\n" + digest_skill_path.read_text(encoding="utf-8"))
+        digest_txt = digest_skill_path.read_text(encoding="utf-8")
+        guides_parts.append("=== คู่มือสกิล `viral-news-digest` (รวมโหมดกระชับ 1+2+1 โมเดลพี่ตูน 1,600M & มาตรฐาน 97-98/100) ===\n" + digest_txt[:15000])
     if spin_skill_path.exists():
-        guides_parts.append("=== คู่มือสกิล `viral-news-spin` (รวมสูตรที่ 9 ขุดความดีเงียบๆ สวนกระแสดราม่า) ===\n" + spin_skill_path.read_text(encoding="utf-8"))
+        spin_txt = spin_skill_path.read_text(encoding="utf-8")
+        guides_parts.append("=== คู่มือสกิล `viral-news-spin` (รวมสูตรที่ 9 ขุดความดีเงียบๆ สวนกระแสดราม่า) ===\n" + spin_txt[:11000])
     if output_mode == "viral_3_para":
         if writer_skill_path.exists():
-            guides_parts.append("=== คู่มือสกิล `viral-news-writer` ===\n" + writer_skill_path.read_text(encoding="utf-8"))
+            guides_parts.append("=== คู่มือสกิล `viral-news-writer` ===\n" + writer_skill_path.read_text(encoding="utf-8")[:6000])
         if prompt_lib_path.exists():
-            guides_parts.append("=== คู่มือคลัง 254 Prompts (`viral-prompt-library`) ===\n" + prompt_lib_path.read_text(encoding="utf-8"))
+            guides_parts.append("=== คู่มือคลัง 254 Prompts (`viral-prompt-library`) ===\n" + prompt_lib_path.read_text(encoding="utf-8")[:6000])
 
     skill_guides_file = job_dir / "SKILL_GUIDES.md"
     skill_guides_file.write_text("\n\n" + ("\n\n" + "=" * 60 + "\n\n").join(guides_parts), encoding="utf-8")
@@ -755,12 +816,15 @@ async def process_job(
         f"  • โหมดสกิลที่ใช้ในงานนี้: **{s_info['full_badge']}**\n"
         f"  • หลักการเฉพาะ:\n{s_info['method_instruction']}\n"
         "  • 🛡️ กฎเหล็กความแม่นยำสูงสุด (Strict Fact-Only & Zero Hallucination 100% — ห้ามมั่วหรือเติมแต่งข้อมูลเด็ดขาด):\n"
-        "    - **ทำจากข้อมูลจริงที่มีหลักฐานรองรับ 100% เท่านั้น:** ทุกชื่อบุคคล ตัวเลขเงิน จำนวนปี สถานที่ และคำพูด ต้องมีที่มาจากคลิป/ภาพ/ข้อความต้นทาง หรือผลลัพธ์ `search_web` ที่ยืนยันตรงเคสจริงเท่านั้น ห้ามเดา ห้ามกะประมาณตัวเลขเอง และห้ามแต่งรายละเอียดแวดล้อมที่ไม่มีในหลักฐานเด็ดขาด!\n"
+        "    - **ทำจากข้อมูลจริงที่มีหลักฐานรองรับ 100% เท่านั้น:** ทุกชื่อบุคคล ตัวเลขเงิน จำนวนปี สถานที่ และคำพูด ต้องมีที่มาจากคลิป/ภาพ/ข้อความต้นทาง หรือผลลัพธ์ `search_web` ที่ยืนยันตรงเคสจริงเท่านั้น ห้ามเดา ห้ามกะประมาณตัวเลขเอง และห้ามจำสลับกับบทละคร/ซิตคอมเด็ดขาด!\n"
+        "    - **กฎเหล็ก Single-Core Purity (1 ข่าว = 1 แกนอารมณ์บริสุทธิ์ ห้ามยัดข้อมูลหลุดโทนมาปนในข่าวเดียว):** ห้ามเอา 2 ประเด็นคนละอารมณ์ของคนเดียวกันมายำปนในกล่องข่าวเดียวกันเด็ดขาด (เช่น ห้ามเอาเรื่องเปิดร้านอาหารมาปนกับเรื่องวิ่งหาเงินซื้อเครื่องช่วยหายใจให้ห้องไอซียู หรือห้ามเอาเรื่องธุรกิจรีสอร์ทมาปนกับเรื่องเด็กวัดสู้ชีวิตตามคำสอนพ่อ) ต้องล็อกแกนเรื่องเดียวที่คมที่สุดร้อยตั้งแต่ต้นจนจบให้เป็นเนื้อเดียวกัน 100%\n"
         "    - **หลักการ 6 แบบ (Same Verified Facts, 6 Structural Styles):** ทั้ง 6 แบบสกิล (`skill_set_1` ถึง `skill_set_6`) คือการนำ **ข้อเท็จจริงจริงชุดเดียวกันที่ตรวจสอบแล้ว** มาจัดโครงสร้างการเล่า 6 สไตล์ (เรียงไทม์ไลน์ / เปิดด้วยคำพูดจริง / ซอย 4 บรรทัดสั้น / เทียบตัวเลข 4 บรรทัดจบ / ไฮบริดเล่าลื่น / สกิลลูกเล่นประยุกต์ข้อมูล) ห้ามแต่งข้อมูลใหม่เพิ่มเพื่อให้ครบ 6 แบบเด็ดขาด!\n"
         "    - **กรณีข่าวมีข้อมูลน้อย / คลิปสั้น (Fact-Bounded Length Adaptation — มีแค่ไหนทำแค่นั้น):** มิติข้อมูลทั้ง 6 จุด (สถานที่, วิธีเอาตัวรอด, ตัวเลขเงิน, จุดเปลี่ยน, ทรัพย์สินปัจจุบัน, เหตุผลเพื่อครอบครัว) ให้ใส่ **เฉพาะจุดที่มีข้อมูลจริงปรากฏในต้นทางหรือค้นเจอจากแหล่งข่าวที่เชื่อถือได้เท่านั้น** หากข่าวนั้นไม่มีข้อมูลบางจุด (เช่น ไม่ได้ระบุอำเภอ ไม่ได้ระบุจำนวนเงิน หรือเป็นข่าวเหตุการณ์สั้นๆ) **ให้ตัดจุดที่ไม่มีข้อมูลออกและปรับลดจำนวนบรรทัด/ความยาวคำลงตามข้อเท็จจริงที่มีอยู่จริงทันที (เช่น เหลือ 70–120 คำ หรือ 3–4 บรรทัด)** ห้ามปั้นน้ำหรือเขียนขยายความลอยๆ เพื่อให้ครบโควตาคำเด็ดขาด!\n"
         "    - **กรณีข้อมูลไม่พอทำมุมบิดประเด็นห้องใหม่ (Fallback for Low-Context Clips):** หากค้น `search_web` เต็มที่แล้วเป็นคลิปชาวบ้าน/CCTV/เหตุการณ์เดี่ยวที่ไม่มีข้อมูลภูมิหลังหรือเรื่องราวอีกห้องหนึ่งบนเว็บเลย ห้ามมโนประวัติชีวิตเองเด็ดขาด! ให้ใช้มุมบิดประเด็นเป็นการ **เจาะดีเทลจุดสังเกตจริงในคลิป/คำพูดจริงอีกแง่มุมหนึ่ง หรือข้อกฎหมาย/ข้อเท็จจริงมาตรฐานที่ตรวจสอบได้จริง** เท่าที่มีหลักฐานรองรับเท่านั้น\n"
         "    - **สูตรที่ 9 สำหรับบิดข่าวน้ำดี/ขุดความดีเงียบๆ สวนกระแสดราม่า (`Positive Counter-Current & Side-Character Good Deed Spin`):** หากเป็นข่าวคนดังหรือตัวละครในข่าวใหญ่ สามารถค้นขุด 'ความดีเงียบๆ ที่คนยังไม่ค่อยรู้' (เช่น สู้ชีวิตจากศูนย์, ความกตัญญูดูแลพ่อแม่ป่วยติดเตียงด้วยตัวเอง, รวยร้อยล้านแต่ติดดิน, จิตอาสาช่วยเหลือสังคมเงียบๆ) มาบิดประเด็นมุมบวกกินใจได้\n"
-        "  • มาตรฐานการเขียน (ลดสำนวนเพ้อฟุ่มเฟือย 100% — กระชับด้วยข้อมูลจริง):\n"
+        "  • 🏆 มาตรฐานการขัดเกลา 97–98/100 (`97–98/100 Multi-Round Polish Standard` + `254-Prompt DNA Matching`):\n"
+        "    - **คัดกรองโทนบวกอบอุ่นใจไร้ดราม่าสำหรับข่าวน้ำดี (`Positive Feel-Good Filter`):** เมื่อทำข่าวน้ำดี/ความกตัญญู/สู้ชีวิต ให้เกลาคำหนักๆ หรือคำดราม่า ('คำดูถูก', 'คำครหา', 'วินาทีเฉียดตาย', 'ถอดหัวโขน') ออกให้เป็นโทนบวกอบอุ่นใจ\n"
+        "    - **จับคู่คลัง 254 DNA Prompts (`Mandatory 254-Prompt DNA Matching`):** ห้ามขึ้นต้นเป็นแพตเทิร์นเดียวกันซ้ำๆ (`[ชื่อ] [อาชีพ] ทำ...`) ให้ประเมินเนื้อหาจับคู่กับการ์ดในคลัง `viral-prompt-library` (254 แนว) ผสานท่าเปิดเฉพาะตัวของการ์ดเข้ากับ `[จุดเริ่มต้น/เหตุผลสำคัญ] + [ใคร] + [การกระทำ/ตัวเลขผลลัพธ์จริง]` และขัดเกลาซ้ำหลายรอบจนได้ระดับ `97–98/100` พร้อมระบุรหัสการ์ดและคะแนนคุณภาพ (เช่น `[Prompt #XX • 98/100]`) ไว้ใน `audit_tag` และ `context_connected`\n"
         "    - ตัดคำโวหารและสำนวนเปรียบเปรยออก 100% (ห้ามเขียน 'ซ่อนความทรงจำไว้ทุกดวง', 'คือมื้อประทังชีวิต', 'เติมเต็มความฝัน') ใช้โควตาคำไปกับข้อเท็จจริงที่มีหลักฐานจริงเท่านั้น\n"
         "    - แบนคำแม่พิมพ์นักวิเคราะห์ซ้ำซาก 100%: ห้ามเปิดเรื่องด้วย 'เบื้องหลัง...', 'เหตุผลที่... มีที่มาจาก...', 'เส้นทางพลิกผันของ...', 'ท่ามกลางกระแส...' ห้ามขึ้นกลางเรื่องด้วย 'หากย้อนกลับไป...', 'จุดเริ่มต้นมาจาก...', 'เหตุการณ์นี้เริ่มต้นขึ้นเมื่อ...', 'ในทางธุรกิจ...' และห้ามจบเทศนาสั่งสอน ('จึงสะท้อนชัดเจนว่า...', 'สิ่งนี้สะท้อน...', 'จึงเป็นบทเรียนชีวิตจริงว่า...', 'จึงเป็นเครื่องพิสูจน์ว่า...', 'นี่แหละ...', 'จาก... กลายเป็น...')\n"
         "    - กฎแยกห้องข้อมูล (`Strict Room Separation`): เมื่อมีข้อมูลชั้นที่ 2 จาก `search_web` เพียงพอ ให้แยกเรื่องราวระหว่าง `มุมปกติ (Room 1)` กับ `มุมบิดประเด็น (Room 2)` ไม่ให้ซ้ำฉากกัน\n"
@@ -770,13 +834,13 @@ async def process_job(
 
     if output_mode == "toon_121":
         mode_instruction = (
-            "โหมดที่เลือก: **⭐ โหมดเขียนกระชับ 1+2+1 (โมเดลพี่ตูน 1,600 ล้าน — ฮุคเข้าใจจบในย่อหน้าแรก + ปิดท้ายอินเนอร์ตัวละคร)**\n"
-            "  • ใช้โครงสร้าง 4 ย่อหน้าสั้น (`1+2+1`) ตาม Section 4 ของ `viral-news-digest`:\n"
-            "    - **ย่อหน้าที่ 1 (The 1-Paragraph Complete Hook — 2-3 บรรทัด):** ห้ามเกริ่นอ้อมค้อมเด็ดขาด! เปิดมาต้องสรุปใจความสำคัญและตัวเลขให้คนอ่านเข้าใจจบทั้งเรื่องได้ในย่อหน้าแรกทันที (`[ใคร] + [ทำอะไร/ตัวเลขที่พีคที่สุด] + [ผลลัพธ์ที่จับต้องได้จริง]`)\n"
-            "    - **ย่อหน้าที่ 2 (ที่มา / จุดเริ่มต้น / จุดสู้ชีวิต — 2-3 บรรทัด):** ขยายที่มาในอดีตหรือจุดเริ่มต้นที่ทำให้เกิดเรื่องนี้แบบกระชับ ตัดน้ำออก 100%\n"
+            "โหมดที่เลือก: **⭐ โหมดเขียนกระชับ 1+2+1 มาตรฐาน 97–98/100 (โมเดลพี่ตูน 1,600 ล้าน + จับคู่คลัง 254 DNA Prompts + Single-Core Purity)**\n"
+            "  • ใช้โครงสร้าง 4 ย่อหน้าสั้น (`1+2+1`) ตาม Section 4 ของ `viral-news-digest` คู่กับ 4 กฎเหล็กมาตรฐาน `97–98/100`:\n"
+            "    - **ย่อหน้าที่ 1 (The 1-Paragraph Complete Hook + 254-Prompt DNA Opening — 2-3 บรรทัด):** ห้ามเกริ่นอ้อมค้อม และห้ามขึ้นต้นซ้ำแพตเทิร์น (`[ชื่อ] [อาชีพ] ทำ...`)! ต้องผสานท่าเปิดของการ์ดจากคลัง `viral-prompt-library` (254 แนว) เข้ากับ `[จุดเริ่มต้น/เหตุผลสำคัญ] + [ใคร] + [การกระทำ/ตัวเลขผลลัพธ์จริง]` เพื่อให้คนอ่านเข้าใจจบทั้งเรื่องได้ในย่อหน้าแรกทันที\n"
+            "    - **ย่อหน้าที่ 2 (ที่มา / จุดเริ่มต้น / จุดสู้ชีวิต — 2-3 บรรทัด):** ขยายที่มาในอดีตหรือจุดเริ่มต้นที่ทำให้เกิดเรื่องนี้แบบกระชับ ตัดน้ำออก 100% และยึดกฎ `Single-Core Purity` (ห้ามเอาเรื่องอื่นคนละอารมณ์มาปนในข่าวเดียวเด็ดขาด)\n"
             "    - **ย่อหน้าที่ 3 (ดีเทลการลงมือทำจริง / ผลลัพธ์ — 2-3 บรรทัด):** ขยายดีเทลการกระทำจริง สถานที่ หรือสิ่งที่มอบให้ครอบครัว/สังคม\n"
             "    - **ย่อหน้าที่ 4 (ท่อนปิดท้ายอินเนอร์ตัวละคร — 2 บรรทัด):** ขมวดจบให้สอดคล้องกับบทเรื่องและตัวละคร หรือใส่อินเนอร์ความรู้สึกของตัวละครลงไป (`เพราะสำหรับเขาแล้ว...`, `เพราะในวัยเด็กเขาเคย...`) ให้จบสวยและกินใจกว่ารายงานข่าวแห้งๆ (ห้ามจบด้วยคำแม่พิมพ์ 'จึงสะท้อนชัดเจนว่า...')\n"
-            "  • ให้สร้างอาร์เรย์ `articles` จำนวน **2 กล่อง** (`มุมปกติ 1+2+1` และ `มุมบิดประเด็น 1+2+1` ตามสูตรที่ 9 หรือมุมบิดข้อมูลจริงชั้นที่ 2) เพื่อให้พนักงานก๊อปปี้ไปโพสต์ได้ทันที และใส่รายละเอียดสรุปหัวข้อข่าวไว้ใน `context_connected` ด้วย\n"
+            "  • ให้สร้างอาร์เรย์ `articles` จำนวน **2 กล่อง** (`มุมปกติ 1+2+1` และ `มุมบิดประเด็น 1+2+1` ตามสูตรที่ 9 หรือมุมบิดข้อมูลจริงชั้นที่ 2) พร้อมระบุรหัสการ์ด Prompt ที่ใช้ + คะแนนคุณภาพ `98/100` ไว้ใน `title`, `context_connected`, และ `audit_tag`\n"
             f"{core_rules}"
         )
     elif s_info["id"] == "all_5_styles":
@@ -882,7 +946,7 @@ async def process_job(
    - Lock 3 (3-Point Match): ข้อมูลต้องตรงบุคคล + สถานที่/เหตุการณ์ + ช่วงเวลา (ระวังคนชื่อคล้ายกันคนละอาชีพ เช่น แยกชื่อ-นามสกุลจริงจากป้ายชื่อ/เอกสารให้แม่นยำ)
    - Lock 4 (Mandatory Skill-Specific Search Execution): ในทุกโหมด (ยกเว้น `strict_clip_only`) **ต้องเรียกใช้ `search_web` จริงเสมออย่างน้อย 2–5 ครั้ง** ตามขั้นตอนการรีเสิร์ชใน `SKILL_GUIDES.md` ของ **{s_info['short_tag']}** ห้ามหยุดค้นแค่ชั้นเดียวแล้วเอาเนื้อหากล่องแรกมาแบ่งครึ่งเขียนซ้ำเด็ดขาด!
 
-เมื่อเขียนและตรวจ QC ทุกบรรทัดเสร็จแล้ว (เช็กซ้ำว่าไร้คำต้องห้าม 'เบื้องหลัง...' / 'จึงสะท้อนชัดเจนว่า...', ไร้คำอังกฤษปนไทยในเนื้อข่าว, แต่ละบรรทัดไม่เกิน 220 ตัวอักษร, และใน `content` ของแต่ละกล่องใส่เฉพาะตัวเนื้อข่าวล้วนๆ ห้ามใส่หัวข้อนำหน้าซ้ำใน `content` และห้ามครอบด้วย ```text) ให้บันทึกผลลัพธ์ลงไฟล์ `{job_dir.as_posix()}/result.json` ด้วย `write_file` (และพิมพ์ JSON เดียวกันออกมาเป็นคำตอบสุดท้าย) ตามโครงสร้างนี้เท่านั้น:
+เมื่อเขียนและขัดเกลาซ้ำหลายรอบจนได้มาตรฐาน 97–98/100 ทุกบรรทัดแล้ว (เช็กซ้ำว่ายึดกฎ Single-Core Purity ไม่เอาข้อมูลหลุดโทนมาปน, ไร้คำต้องห้าม 'เบื้องหลัง...' / 'จึงสะท้อนชัดเจนว่า...', ไร้คำอังกฤษปนไทยในเนื้อข่าว, แต่ละบรรทัดไม่เกิน 220 ตัวอักษร, และใน `content` ของแต่ละกล่องใส่เฉพาะตัวเนื้อข่าวล้วนๆ ห้ามใส่หัวข้อนำหน้าซ้ำใน `content` และห้ามครอบด้วย ```text) ให้บันทึกผลลัพธ์ลงไฟล์ `{job_dir.as_posix()}/result.json` ด้วย `write_file` ทันที (เมื่อ `write_file` บันทึก `result.json` สำเร็จแล้ว ให้ตอบสั้นๆ เพียงคำว่า `"SAVED_OK"` เท่านั้น ห้ามพิมพ์ก้อน JSON ซ้ำออกมาทางหน้าจอเด็ดขาด!) ตามโครงสร้างนี้เท่านั้น:
 {{
   "headline": "หัวข้อสรุปเคสข่าวสั้นๆ เข้าใจทันที",
   "skill_set": "{s_info['id']}",
@@ -905,8 +969,8 @@ async def process_job(
   ],
   "raw_news": "เนื้อข่าวรวมทุกกล่อง",
   "visual_audio_breakdown": "สรุปข้อเท็จจริงดิบที่สกัดได้จากภาพ-เสียงในคลิปหรือบทความต้นทางแบบละเอียด",
-  "context_connected": "ระบุผลลัพธ์การค้นหาจริงตามหลักของ {s_info['short_tag']} แยกเป็น (ชั้นที่ 1: ข้อมูลต้นทางฉบับเต็ม) และ (ชั้นที่ 2: ข้อมูลเจาะลึกที่ค้นเจอจริงจาก search_web)",
-  "audit_tag": "✅ {s_info['full_badge']} • [ที่มาข้อมูล: ระบุแหล่งต้นทางจริง + ข้อมูลชั้นที่ 2 ที่ค้นตรวจซ้ำ]",
+  "context_connected": "ระบุผลลัพธ์การค้นหาจริงตามหลักของ {s_info['short_tag']} แยกเป็น (ชั้นที่ 1: ข้อมูลต้นทางฉบับเต็ม), (ชั้นที่ 2: ข้อมูลเจาะลึกที่ค้นเจอจริงจาก search_web), และ (การ์ด Prompt ที่จับคู่จาก 254 แนว + คะแนนคุณภาพ 98/100)",
+  "audit_tag": "✅ {s_info['full_badge']} • [Prompt DNA Matched • มาตรฐาน 98/100] • [ที่มาข้อมูล: ระบุแหล่งต้นทางจริง + ข้อมูลชั้นที่ 2 ที่ค้นตรวจซ้ำ]",
   "fact_check_references": [
     {{
       "claim": "ประเด็น/ข้อเท็จจริงสำคัญที่นำมาเขียนในเนื้อข่าว",
@@ -925,11 +989,11 @@ async def process_job(
         "--print", prompt,
     ]
 
-    agy_res = await run_subprocess(cmd_agy, cwd=job_dir, timeout=480)
+    result_json_path = job_dir / "result.json"
+    agy_res = await run_agy_with_result_watcher(cmd_agy, cwd=job_dir, result_json_path=result_json_path, timeout=480)
     progress_cb("กำลังจัดรูปแบบผลลัพธ์และบันทึกข้อมูล...", 92)
 
     result_data: Optional[Dict[str, Any]] = None
-    result_json_path = job_dir / "result.json"
 
     if result_json_path.exists():
         try:

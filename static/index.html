@@ -415,8 +415,8 @@
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
         <div class="bg-slate-950 border border-amber-500/30 rounded-xl p-3.5 space-y-1.5">
-          <div class="font-bold text-amber-300">1. ⭐ โหมดเขียนกระชับ 1+2+1 (โมเดลพี่ตูน 1,600M)</div>
-          <p class="text-slate-300 leading-relaxed">• <strong>ย่อหน้า 1:</strong> ฮุคสรุปใจความสำคัญและตัวเลขให้เข้าใจจบทั้งเรื่องในย่อหน้าแรกทันที (ห้ามเกริ่นอ้อมค้อม)<br>• <strong>ย่อหน้า 2–3:</strong> ขยายที่มา/จุดสู้ชีวิต และดีเทลการลงมือทำจริงแบบกระชับ<br>• <strong>ย่อหน้า 4 (ท่อนปิดท้าย):</strong> ขมวดจบใส่อินเนอร์ความรู้สึกของตัวละครให้จบสวยและกินใจกว่ารายงานข่าวแห้งๆ</p>
+          <div class="font-bold text-amber-300">1. ⭐ โหมดเขียนกระชับ 1+2+1 (โมเดลพี่ตูน 1,600M + มาตรฐาน 97–98/100)</div>
+          <p class="text-slate-300 leading-relaxed">• <strong>ย่อหน้า 1:</strong> ผสานท่าเปิดคลัง 254 DNA Prompts เข้ากับฮุคสรุปใจความสำคัญให้เข้าใจจบทั้งเรื่องในย่อหน้าแรกทันที<br>• <strong>กฎ Single-Core Purity:</strong> 1 ข่าวล็อก 1 แกนอารมณ์บริสุทธิ์ ห้ามเอาเรื่องคนละโทนมายำปนกันในข่าวเดียวเด็ดขาด<br>• <strong>ท่อนปิดท้าย:</strong> ขมวดจบใส่อินเนอร์ความรู้สึกของตัวละคร + คัดกรองโทนบวกอบอุ่นใจไร้คำดราม่าหนักๆ</p>
         </div>
 
         <div class="bg-slate-950 border border-emerald-500/30 rounded-xl p-3.5 space-y-1.5">
@@ -430,8 +430,8 @@
         </div>
 
         <div class="bg-slate-950 border border-violet-500/30 rounded-xl p-3.5 space-y-1.5">
-          <div class="font-bold text-violet-300">4. 📝 คลัง 254 DNA Prompts + กฎปกข่าวฮุคมุมบวก</div>
-          <p class="text-slate-300 leading-relaxed">• โหมด <strong>ข่าวสั้น 3 ย่อหน้า</strong> จับคู่คลัง <code>viral-prompt-library</code> 254 การ์ดอัตโนมัติ<br>• <strong>พาดหัวปก 2 บรรทัด:</strong> ฮุคมุมบวกกินใจ และ <strong>ข่าวคนดังไม่ต้องใส่ป้ายชื่อมุมขวาล่าง</strong><br>• ก๊อบปี้หลายข่าวคั่นด้วยเส้นประ <code>--------------------------------------------------</code> พร้อมดัชนีสรุปหัวข้อด้านล่าง</p>
+          <div class="font-bold text-violet-300">4. 🏆 มาตรฐานขัดเกลา 97–98/100 + คลัง 254 DNA Prompts</div>
+          <p class="text-slate-300 leading-relaxed">• บังคับจับคู่การ์ดจากคลัง <code>viral-prompt-library</code> (254 แนว) ไม่ให้ขึ้นต้นซ้ำแพตเทิร์น พร้อมแนบรหัสการ์ดและคะแนนคุณภาพ (<code>98/100</code>)<br>• <strong>พาดหัวปก 2 บรรทัด:</strong> ฮุคมุมบวกกินใจ และ <strong>ข่าวคนดังไม่ต้องใส่ป้ายชื่อมุมขวาล่าง</strong><br>• ก๊อบปี้หลายข่าวคั่นด้วยเส้นประ <code>--------------------------------------------------</code> พร้อมดัชนีสรุปหัวข้อด้านล่าง</p>
         </div>
       </div>
     </div>
@@ -479,7 +479,7 @@
       return SKILL_SET_LABELS[sk] || res.skill_set_short || '🔥 ครบทั้ง 6 แบบ (พนักงานเลือกเอง)';
     }
 
-    async function openBatchPackModal(packId = 'pack_celebrity_story') {
+    async function openBatchPackModal(packId = 'pack_98_100_round8') {
       const modal = document.getElementById('batch-pack-modal');
       if (modal) modal.classList.remove('hidden');
       try {

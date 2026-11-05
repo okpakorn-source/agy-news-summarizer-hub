@@ -326,7 +326,7 @@ async def background_worker(
                 skill_set=skill_set,
             )
             result = await asyncio.to_thread(upload_job_media_to_cloud, job_id, job_dir, result)
-            await asyncio.to_thread(update_job_progress, job_id, "completed", "สรุปเนื้อข่าวครบทั้ง 5 แบบเรียบร้อย!", 100, result)
+            await asyncio.to_thread(update_job_progress, job_id, "completed", "สรุปเนื้อข่าวครบทั้ง 6 แบบ (มาตรฐาน 98/100) เรียบร้อย!", 100, result)
         except Exception as e:
             s_err = str(e)
             if isinstance(e, subprocess.TimeoutExpired) or "timed out" in s_err.lower():
@@ -945,7 +945,9 @@ async def api_delete_topic(topic_id: str):
 
 
 @app.get("/api/batch-pack")
-async def api_batch_pack(pack_id: str = "pack_celebrity_story"):
-    from curated_packs_hub import build_batch_copy_payload
-    return build_batch_copy_payload(pack_id=pack_id)
+async def api_batch_pack(pack_id: str = "pack_98_100_round8"):
+    import importlib
+    import curated_packs_hub
+    importlib.reload(curated_packs_hub)
+    return curated_packs_hub.build_batch_copy_payload(pack_id=pack_id)
 
