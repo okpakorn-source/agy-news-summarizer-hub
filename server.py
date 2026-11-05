@@ -436,7 +436,10 @@ async def on_startup():
 @app.get("/", response_class=HTMLResponse)
 async def index():
     index_file = STATIC_DIR / "index.html"
-    return index_file.read_text(encoding="utf-8")
+    return HTMLResponse(
+        content=index_file.read_text(encoding="utf-8"),
+        headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"},
+    )
 
 
 @app.get("/ready")

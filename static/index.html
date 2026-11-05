@@ -190,34 +190,8 @@
             </div>
           </div>
 
-          <!-- 3. 2 Core Styles Standard Badge + Single-Style Quick Toggles -->
-          <div class="space-y-2">
-            <input type="hidden" id="skill-set" value="all_5_styles" />
-            <div class="grid grid-cols-1 gap-1.5">
-              <button type="button" data-skill="all_5_styles" onclick="selectSkillSet('all_5_styles')"
-                class="skill-btn w-full text-left px-3 py-2.5 rounded-xl border transition bg-emerald-500/15 border-emerald-500 text-white shadow-sm">
-                <div class="text-xs font-bold text-emerald-300 flex items-center justify-between">
-                  <span>🔥 มาตรฐานใหม่: ครบทั้ง 2 แนวหลัก มาตรฐาน 98/100 (แนะนำ)</span>
-                  <span class="text-[10px] px-2 py-0.5 rounded-md bg-emerald-500/25 text-emerald-200 font-bold">2 แนว × 2 มุม = 4 กล่อง</span>
-                </div>
-                <div class="text-[11px] text-slate-300 mt-0.5 leading-relaxed">
-                  ได้ทั้ง <strong class="text-amber-300">⭐ แนวที่ 1: กระชับ 1+2+1 (จับคู่ 254 DNA + ปิดอินเนอร์)</strong> และ <strong class="text-sky-300">💡 แนวที่ 2: สกิลลูกเล่นแตกบรรทัด (1+3+1)</strong>
-                </div>
-              </button>
-              <div class="grid grid-cols-2 gap-1.5">
-                <button type="button" data-skill="toon_dna_121" onclick="selectSkillSet('toon_dna_121')"
-                  class="skill-btn text-left p-2 rounded-xl border transition bg-slate-950/70 border-slate-800 hover:border-slate-700 text-slate-200">
-                  <div class="text-[11px] font-bold">⭐ เฉพาะแนวที่ 1: กระชับ 1+2+1</div>
-                  <div class="text-[10px] text-slate-400 mt-0.5">ฮุคจบย่อหน้าแรก + จับคู่ 254 DNA (2 กล่อง)</div>
-                </button>
-                <button type="button" data-skill="applied_hybrid_131" onclick="selectSkillSet('applied_hybrid_131')"
-                  class="skill-btn text-left p-2 rounded-xl border transition bg-slate-950/70 border-slate-800 hover:border-slate-700 text-slate-200">
-                  <div class="text-[11px] font-bold">💡 เฉพาะแนวที่ 2: สกิลลูกเล่น (1+3+1)</div>
-                  <div class="text-[10px] text-slate-400 mt-0.5">ลูกเล่นประยุกต์ข้อมูล + ไฮบริด (2 กล่อง)</div>
-                </button>
-              </div>
-            </div>
-          </div>
+          <!-- Hidden default skill-set (automatically runs 2 Core Styles = 4 boxes) -->
+          <input type="hidden" id="skill-set" value="all_5_styles" />
 
           <!-- 3. Custom Requirement / Angle Box (Prominent upfront!) -->
           <div>
