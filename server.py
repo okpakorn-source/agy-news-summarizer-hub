@@ -355,7 +355,7 @@ async def supabase_cloud_poller():
         try:
             lan_ip = get_lan_ip()
             if MAINTENANCE_MODE:
-                await asyncio.to_thread(update_host_heartbeat, "⛔ ปิดปรับปรุงระบบชั่วคราว (งดใช้งาน)", VERCEL_PUBLIC_URL)
+                await asyncio.to_thread(update_host_heartbeat, "⛔ ปิดปรับปรุงระบบชั่วคราว (งดใช้งาน)", VERCEL_PUBLIC_URL, False)
                 cloud_jobs = await asyncio.to_thread(list_jobs_from_supabase, 30)
                 for cj in cloud_jobs:
                     jid = cj.get("id")

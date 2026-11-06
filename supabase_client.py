@@ -22,6 +22,7 @@ SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://zkfwnfqefikmctdpyeui.supa
 SUPABASE_KEY = os.environ.get("SUPABASE_SECRET_KEY", "")
 BUCKET_NAME = "agy-news-hub"
 JOB_PREFIX = "agy_hub_job:"
+TOPIC_PREFIX = "agy_hub_topic:"
 HOST_STATUS_KEY = "agy_hub_host_status"
 
 
@@ -132,19 +133,85 @@ def delete_job_from_supabase(job_id: str) -> bool:
     return resp.status_code in (200, 204)
 
 
+def save_topic_to_supabase(topic_dict: Dict[str, Any]) -> bool:
+    """Upsert a topic item into Supabase `app_settings` table under `agy_hub_topic:<id>`."""
+    topic_id = topic_dict["id"]
+    key = f"{TOPIC_PREFIX}{topic_id}"
+    url = f"{SUPABASE_URL}/rest/v1/app_settings"
+    payload = {
+        "key": key,
+        "value": topic_dict,
+        "updated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+    }
+    resp = requests.post(
+        url,
+        headers=_headers({"Prefer": "resolution=merge-duplicates"}),
+        json=payload,
+        timeout=15,
+    )
+    return resp.status_code in (200, 201, 204)
+
+
+def get_topic_from_supabase(topic_id: str) -> Optional[Dict[str, Any]]:
+    key = f"{TOPIC_PREFIX}{topic_id}"
+    url = f"{SUPABASE_URL}/rest/v1/app_settings"
+    resp = requests.get(
+        url,
+        headers=_headers(),
+        params={"key": f"eq.{key}", "select": "value"},
+        timeout=10,
+    )
+    if resp.status_code == 200:
+        rows = resp.json()
+        if rows:
+            return _parse_val(rows[0].get("value"))
+    return None
+
+
+def list_topics_from_supabase(limit: int = 200) -> List[Dict[str, Any]]:
+    url = f"{SUPABASE_URL}/rest/v1/app_settings?key=like.agy_hub_topic*&select=key,value&order=updated_at.desc&limit={int(limit)}"
+    resp = requests.get(
+        url,
+        headers=_headers(),
+        timeout=12,
+    )
+    if resp.status_code != 200:
+        return []
+    rows = resp.json()
+    topics = []
+    for r in rows:
+        val = _parse_val(r.get("value"))
+        if val and val.get("id"):
+            topics.append(val)
+    topics.sort(key=lambda x: (int(x.get("order_no") or 9999), x.get("created_at", "")))
+    return topics
+
+
+def delete_topic_from_supabase(topic_id: str) -> bool:
+    key = f"{TOPIC_PREFIX}{topic_id}"
+    url = f"{SUPABASE_URL}/rest/v1/app_settings"
+    resp = requests.delete(
+        url,
+        headers=_headers(),
+        params={"key": f"eq.{key}"},
+        timeout=10,
+    )
+    return resp.status_code in (200, 204)
+
+
 TH_TZ = datetime.timezone(datetime.timedelta(hours=7))
 
 
-def update_host_heartbeat(lan_url: str = "", tunnel_url: str = ""):
+def update_host_heartbeat(lan_url: str = "", tunnel_url: str = "", online: bool = True):
     url = f"{SUPABASE_URL}/rest/v1/app_settings"
-    now_epoch = time.time()
+    now_epoch = time.time() if online else 0
     payload = {
         "key": HOST_STATUS_KEY,
         "value": {
-            "online": True,
+            "online": bool(online),
             "last_seen": now_epoch,
             "last_seen_epoch": now_epoch,
-            "last_seen_str": datetime.datetime.now(TH_TZ).strftime("%Y-%m-%d %H:%M:%S"),
+            "last_seen_str": datetime.datetime.now(TH_TZ).strftime("%Y-%m-%d %H:%M:%S") if online else "⛔ ปิดปรับปรุงชั่วคราว",
             "lan_url": lan_url,
             "tunnel_url": tunnel_url,
         },
