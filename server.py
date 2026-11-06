@@ -39,6 +39,8 @@ from supabase_client import (
 )
 
 IS_VERCEL = bool(os.environ.get("VERCEL"))
+MAINTENANCE_MODE = True
+MAINTENANCE_MESSAGE = "⛔ ปิดปรับปรุงระบบชั่วคราว — งดใช้งานและงดส่งงานทุกช่องทางจนกว่าจะเปิดให้บริการอีกครั้ง"
 
 BASE_DIR = Path(__file__).parent.resolve()
 JOBS_DIR = BASE_DIR / "jobs_data"
@@ -352,6 +354,30 @@ async def supabase_cloud_poller():
     while True:
         try:
             lan_ip = get_lan_ip()
+            if MAINTENANCE_MODE:
+                await asyncio.to_thread(update_host_heartbeat, "⛔ ปิดปรับปรุงระบบชั่วคราว (งดใช้งาน)", VERCEL_PUBLIC_URL)
+                cloud_jobs = await asyncio.to_thread(list_jobs_from_supabase, 30)
+                for cj in cloud_jobs:
+                    jid = cj.get("id")
+                    if not jid or str(jid).startswith("99999999_"):
+                        continue
+                    if cj.get("status") in ("queued", "processing"):
+                        cj["status"] = "failed"
+                        cj["progress_text"] = MAINTENANCE_MESSAGE
+                        cj["progress_pct"] = 100
+                        cj["result"] = {
+                            "headline": "⛔ ปิดปรับปรุงระบบชั่วคราว (งดใช้งาน)",
+                            "raw_news": MAINTENANCE_MESSAGE,
+                            "visual_audio_breakdown": "-",
+                            "context_connected": "-",
+                            "audit_tag": "⛔ ระบบปิดปรับปรุงชั่วคราว",
+                            "contact_sheets": [],
+                            "uploaded_images": [],
+                        }
+                        await asyncio.to_thread(save_job_to_supabase, cj)
+                await asyncio.sleep(3)
+                continue
+
             await asyncio.to_thread(update_host_heartbeat, f"http://{lan_ip}:8080", VERCEL_PUBLIC_URL)
             cloud_jobs = await asyncio.to_thread(list_jobs_from_supabase, 30)
 
@@ -460,7 +486,9 @@ async def system_info():
             "lan_url": hb.get("lan_url") or "http://localhost:8080",
             "local_url": "http://localhost:8080",
             "tunnel_url": VERCEL_PUBLIC_URL,
-            "host_online": bool(hb.get("online", False)),
+            "host_online": False if MAINTENANCE_MODE else bool(hb.get("online", False)),
+            "maintenance_mode": MAINTENANCE_MODE,
+            "maintenance_message": MAINTENANCE_MESSAGE,
             "host_last_seen": hb.get("last_seen_str", ""),
             "stats": counts,
         }
@@ -472,10 +500,12 @@ async def system_info():
     counts = {r["status"]: r["cnt"] for r in rows}
 
     return {
-        "lan_url": f"http://{lan_ip}:8080",
+        "lan_url": "⛔ ปิดปรับปรุงระบบชั่วคราว (งดใช้งาน)" if MAINTENANCE_MODE else f"http://{lan_ip}:8080",
         "local_url": "http://localhost:8080",
         "tunnel_url": VERCEL_PUBLIC_URL,
-        "host_online": True,
+        "host_online": not MAINTENANCE_MODE,
+        "maintenance_mode": MAINTENANCE_MODE,
+        "maintenance_message": MAINTENANCE_MESSAGE,
         "stats": {
             "queued": counts.get("queued", 0),
             "processing": counts.get("processing", 0),
@@ -539,6 +569,9 @@ async def submit_job(
     skill_set: str = Form("all_5_styles"),
     images: List[UploadFile] = File(default=[]),
 ):
+    if MAINTENANCE_MODE:
+        raise HTTPException(status_code=503, detail=MAINTENANCE_MESSAGE)
+
     urls, focus_instruction, output_mode, skill_set = parse_chat_style_submission(
         urls_input, raw_text, focus_instruction, output_mode, skill_set
     )
@@ -755,6 +788,8 @@ async def update_job_text(job_id: str, body: UpdateJobBody):
 
 @app.post("/api/jobs/{job_id}/retry")
 async def retry_job(job_id: str):
+    if MAINTENANCE_MODE:
+        raise HTTPException(status_code=503, detail=MAINTENANCE_MESSAGE)
     j = await asyncio.to_thread(get_job_from_supabase, job_id)
     if not IS_VERCEL and not j:
         conn = get_db()
