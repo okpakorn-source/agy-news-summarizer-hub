@@ -212,7 +212,7 @@ class PasswordChangeRequest(BaseModel):
     new_team_password: Optional[str] = None
 
 
-@app.get("/login", response_class=HTMLResponse)
+@app.api_route("/login", methods=["GET", "HEAD"], response_class=HTMLResponse)
 async def login_page(request: Request):
     user = get_current_user_from_request(request)
     if user:
@@ -2097,7 +2097,7 @@ INDEX_HTML = r"""<!DOCTYPE html>
 """
 
 
-@app.get("/", response_class=HTMLResponse)
+@app.api_route("/", methods=["GET", "HEAD"], response_class=HTMLResponse)
 async def main_dashboard(request: Request):
     user = get_current_user_from_request(request)
     if not user:
