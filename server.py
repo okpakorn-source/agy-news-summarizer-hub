@@ -132,8 +132,12 @@ def parse_chat_style_submission(
 
 
 def get_db():
-    conn = sqlite3.connect(str(DB_PATH), check_same_thread=False)
+    conn = sqlite3.connect(str(DB_PATH), timeout=30.0, check_same_thread=False)
     conn.row_factory = sqlite3.Row
+    try:
+        conn.execute("PRAGMA busy_timeout = 30000")
+    except Exception:
+        pass
     return conn
 
 
@@ -141,6 +145,11 @@ def init_db():
     if IS_VERCEL:
         return
     conn = get_db()
+    try:
+        conn.execute("PRAGMA journal_mode = WAL")
+        conn.execute("PRAGMA synchronous = NORMAL")
+    except Exception:
+        pass
     conn.execute("""
         CREATE TABLE IF NOT EXISTS jobs (
             id TEXT PRIMARY KEY,
@@ -162,6 +171,10 @@ def init_db():
         conn.execute("ALTER TABLE jobs ADD COLUMN skill_set TEXT DEFAULT 'skill_set_5'")
     except Exception:
         pass
+    # Recover any jobs that were interrupted mid-processing when the server last stopped
+    conn.execute(
+        "UPDATE jobs SET status='queued', progress_text='รอเครื่องแม่ประมวลผลต่อหลังรีสตาร์ท...', progress_pct=10 WHERE status='processing'"
+    )
     conn.execute("""
         CREATE TABLE IF NOT EXISTS evergreen_topics (
             id TEXT PRIMARY KEY,
@@ -348,12 +361,12 @@ async def background_worker(
 
 
 async def supabase_cloud_poller():
-    """Background loop on Host PC that picks up queued jobs submitted via Vercel/Supabase."""
+    """Background loop on Host PC that picks up queued jobs submitted via Vercel/Supabase or local DB."""
     while True:
         try:
             lan_ip = get_lan_ip()
             await asyncio.to_thread(update_host_heartbeat, f"http://{lan_ip}:8080", VERCEL_PUBLIC_URL)
-            cloud_jobs = await asyncio.to_thread(list_jobs_from_supabase, 30)
+            cloud_jobs = await asyncio.to_thread(list_jobs_from_supabase, 80)
 
             for cj in cloud_jobs:
                 jid = cj.get("id")
@@ -366,11 +379,13 @@ async def supabase_cloud_poller():
                     if loc_row and loc_row["status"] in ("completed", "failed"):
                         await asyncio.to_thread(sync_row_to_supabase, jid)
                         continue
+                    # If neither completed nor active locally, re-queue it so it doesn't stay stuck
+                    cj["status"] = "queued"
                 if cj.get("status") == "queued" and jid not in ACTIVE_LOCAL_JOBS:
                     ACTIVE_LOCAL_JOBS.add(jid)
                     job_dir = JOBS_DIR / jid
                     job_dir.mkdir(parents=True, exist_ok=True)
-                    cj_skill_set = cj.get("skill_set") or "skill_set_5"
+                    cj_skill_set = cj.get("skill_set") or "all_5_styles"
 
                     saved_images: List[str] = []
                     for idx, img_url in enumerate(cj.get("uploaded_image_urls") or []):
@@ -384,6 +399,14 @@ async def supabase_cloud_poller():
                                 saved_images.append(fname)
                         except Exception:
                             pass
+
+                    # Preserve any existing uploaded_* files in job_dir (e.g. on job retry)
+                    if not saved_images:
+                        saved_images = sorted(
+                            p.name
+                            for p in job_dir.glob("uploaded_*")
+                            if p.is_file() and not p.name.startswith("uploaded_og_")
+                        )
 
                     conn = get_db()
                     conn.execute(
@@ -422,6 +445,36 @@ async def supabase_cloud_poller():
                             skill_set=cj_skill_set,
                         )
                     )
+
+            # Also pick up any local queued jobs (e.g. retried locally or recovered on startup)
+            conn = get_db()
+            local_queued = conn.execute("SELECT * FROM jobs WHERE status = 'queued' ORDER BY created_at ASC LIMIT 10").fetchall()
+            conn.close()
+            for lrow in local_queued:
+                ljid = lrow["id"]
+                if ljid not in ACTIVE_LOCAL_JOBS:
+                    ACTIVE_LOCAL_JOBS.add(ljid)
+                    job_dir = JOBS_DIR / ljid
+                    job_dir.mkdir(parents=True, exist_ok=True)
+                    existing_imgs = sorted(
+                        p.name
+                        for p in job_dir.glob("uploaded_*")
+                        if p.is_file() and not p.name.startswith("uploaded_og_")
+                    )
+                    l_urls = json.loads(lrow["urls_json"] or "[]")
+                    l_skill = lrow["skill_set"] if "skill_set" in lrow.keys() and lrow["skill_set"] else "all_5_styles"
+                    asyncio.create_task(
+                        background_worker(
+                            job_id=ljid,
+                            job_dir=job_dir,
+                            urls=l_urls,
+                            raw_text=lrow["raw_text"] or "",
+                            focus_instruction=lrow["focus_instruction"] or "",
+                            output_mode=lrow["output_mode"] or "normal_1_spin_1",
+                            image_files=existing_imgs,
+                            skill_set=l_skill,
+                        )
+                    )
         except Exception:
             pass
         await asyncio.sleep(3)
@@ -433,7 +486,7 @@ async def on_startup():
         asyncio.create_task(supabase_cloud_poller())
 
 
-@app.get("/", response_class=HTMLResponse)
+@app.api_route("/", methods=["GET", "HEAD"], response_class=HTMLResponse)
 async def index():
     index_file = STATIC_DIR / "index.html"
     return HTMLResponse(
@@ -762,6 +815,7 @@ async def retry_job(job_id: str):
         conn.close()
         if r:
             item = dict(r)
+            prev_res = json.loads(item["result_json"]) if item["result_json"] else {}
             j = {
                 "id": item["id"],
                 "employee_name": item["employee_name"],
@@ -770,10 +824,17 @@ async def retry_job(job_id: str):
                 "focus_instruction": item["focus_instruction"],
                 "output_mode": item["output_mode"] or "normal_1_spin_1",
                 "skill_set": item.get("skill_set") or "all_5_styles",
+                "result": prev_res,
                 "created_at": item["created_at"],
             }
     if not j:
         raise HTTPException(status_code=404, detail="ไม่พบงานนี้")
+
+    prev_res = j.get("result") or {}
+    if not j.get("uploaded_image_urls") and isinstance(prev_res, dict):
+        http_imgs = [u for u in (prev_res.get("uploaded_images") or []) if str(u).startswith("http")]
+        if http_imgs:
+            j["uploaded_image_urls"] = http_imgs
 
     j["status"] = "queued"
     j["progress_text"] = "ส่งเข้าคิวรันใหม่อีกครั้ง รอเครื่องแม่ดึงไปประมวลผล..."
@@ -953,4 +1014,9 @@ async def api_batch_pack(pack_id: str = "pack_98_100_round8"):
     import curated_packs_hub
     importlib.reload(curated_packs_hub)
     return curated_packs_hub.build_batch_copy_payload(pack_id=pack_id)
+
+
+@app.get("/api/ready-posts")
+async def api_ready_posts():
+    return {"posts": []}
 

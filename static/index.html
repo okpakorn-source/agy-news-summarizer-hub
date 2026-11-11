@@ -56,7 +56,7 @@
         </div>
 
         <!-- Batch 5-Story 1+2+1 Copy Button -->
-        <button type="button" onclick="openBatchPackModal('pack_celebrity_story')"
+        <button type="button" onclick="openBatchPackModal('pack_98_100_round8')"
           class="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-bold px-3 py-1.5 rounded-xl text-xs shadow transition flex items-center gap-1.5">
           <span>📦 ก๊อบปี้ชุด 5 ข่าว (1+2+1)</span>
         </button>
@@ -431,8 +431,21 @@
     let expandedJobs = new Set();
     // Track per-article edit boxes with key `${jobId}:${idx}`
     let editingBoxes = new Set();
+    // Track open <details> panels so 3s polling never snaps them shut
+    let openDetailsKeys = new Set();
     // Track selected style filter per jobId: 'ALL5' or 'skill_set_1'..'skill_set_6' (default 'skill_set_5')
     let selectedJobStyle = {};
+    let lastRenderSignature = '';
+    let isFetchingJobs = false;
+    let isFetchingSysInfo = false;
+
+    function handleDetailsToggle(key, isOpen) {
+      if (isOpen) {
+        openDetailsKeys.add(key);
+      } else {
+        openDetailsKeys.delete(key);
+      }
+    }
 
     const MODE_LABELS = {
       toon_121: '⭐ กระชับ 1+2+1 (พี่ตูน 1,600M)',
@@ -532,7 +545,7 @@
     function selectJobStyleTab(jobId, styleId, event) {
       if (event) event.stopPropagation();
       selectedJobStyle[jobId] = styleId;
-      renderJobs();
+      renderJobs(true);
     }
 
     function isPlaceholderNickname(val) {
@@ -788,13 +801,13 @@
       } else {
         expandedJobs.add(jobId);
       }
-      renderJobs();
+      renderJobs(true);
     }
 
     function collapseAll() {
       expandedJobs.clear();
       editingBoxes.clear();
-      renderJobs();
+      renderJobs(true);
     }
 
     function toggleEditBox(jobId, idx, event) {
@@ -805,7 +818,7 @@
       } else {
         editingBoxes.add(key);
       }
-      renderJobs();
+      renderJobs(true);
     }
 
     async function saveEditedBox(jobId, idx) {
@@ -967,7 +980,7 @@
     }
 
     function handleSearchInput() {
-      renderJobs();
+      renderJobs(true);
     }
 
     function setFilterMode(mode) {
@@ -987,7 +1000,7 @@
           : 'px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-800/80 text-slate-300 hover:bg-slate-700 transition';
       }
 
-      renderJobs();
+      renderJobs(true);
     }
 
     function setTopicStatusFilter(st) {
@@ -1279,13 +1292,18 @@
       return 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40';
     }
 
-    function renderJobs() {
+    function renderJobs(force = false) {
       const container = document.getElementById('jobs-container');
       document.getElementById('count-all').textContent = allJobs.length;
 
       // Don't re-render while employee is actively editing a box
       const activeId = document.activeElement ? document.activeElement.id : null;
       if (activeId && activeId.startsWith('edit-box-')) return;
+
+      // Don't clobber active text selection during background 3s polling
+      if (!force && window.getSelection && window.getSelection().toString().trim().length > 0) {
+        return;
+      }
 
       const myName = (document.getElementById('employee-name').value || '').trim().toLowerCase();
       const myCount = myName
@@ -1313,6 +1331,28 @@
         }
         return true;
       });
+
+      const sig = JSON.stringify({
+        filterMode,
+        q,
+        myName,
+        exp: Array.from(expandedJobs),
+        edit: Array.from(editingBoxes),
+        style: selectedJobStyle,
+        jobs: filtered.map((j) => [
+          j.id,
+          j.status,
+          j.progress_pct,
+          j.progress_text,
+          j.employee_name,
+          j.result?.headline,
+          (j.result?.articles || []).map((a) => (a.content || '').length),
+        ]),
+      });
+      if (!force && sig === lastRenderSignature) {
+        return;
+      }
+      lastRenderSignature = sig;
 
       if (filtered.length === 0) {
         container.innerHTML = `
@@ -1631,7 +1671,7 @@
 
               <!-- Fact-Check Reference Table -->
               ${(res.fact_check_references && res.fact_check_references.length > 0) ? `
-                <details class="bg-slate-950/70 border border-sky-500/30 rounded-xl px-4 py-3 text-xs">
+                <details ${openDetailsKeys.has('fact:' + j.id) ? 'open' : ''} ontoggle="handleDetailsToggle('fact:${j.id}', this.open)" class="bg-slate-950/70 border border-sky-500/30 rounded-xl px-4 py-3 text-xs">
                   <summary class="cursor-pointer font-semibold text-sky-300 hover:text-sky-200 flex items-center justify-between">
                     <span>📌 จุดตรวจข้อเท็จจริง & แหล่งอ้างอิงรายประเด็น (${res.fact_check_references.length} จุดตรวจซ้ำ)</span>
                     <span class="text-[11px] text-slate-400 font-normal">คลิกเพื่อดู/ย่อ</span>
@@ -1665,7 +1705,7 @@
               ` : ''}
 
               <!-- Deep-Dive Frames & Audio Breakdown -->
-              <details class="bg-slate-950/40 border border-slate-800/80 rounded-xl px-3.5 py-2 text-xs">
+              <details ${openDetailsKeys.has('media:' + j.id) ? 'open' : ''} ontoggle="handleDetailsToggle('media:${j.id}', this.open)" class="bg-slate-950/40 border border-slate-800/80 rounded-xl px-3.5 py-2 text-xs">
                 <summary class="cursor-pointer font-medium text-slate-400 hover:text-slate-200">
                   🔍 ดูข้อมูลการแกะภาพ-เสียง & เฟรมภาพจากคลิปจริง (${allMedia.length} ภาพ)
                 </summary>
@@ -1698,8 +1738,11 @@
     }
 
     async function fetchSystemInfo() {
+      if (isFetchingSysInfo) return;
+      isFetchingSysInfo = true;
       try {
         const res = await fetch('/api/system-info');
+        if (!res.ok) return;
         const data = await res.json();
         document.getElementById('lan-url-display').textContent = data.lan_url || 'http://localhost:8080';
         document.getElementById('tunnel-url-display').textContent = data.tunnel_url || 'https://agy-news-summarizer-hub.vercel.app';
@@ -1719,87 +1762,32 @@
           dot.className = 'w-1.5 h-1.5 rounded-full bg-amber-400';
           txt.textContent = 'รอเปิดรับงานที่คอมเครื่องแม่ (ส่งเข้าคิวรอไว้ได้)';
         }
-      } catch (e) {}
+      } catch (e) {
+      } finally {
+        isFetchingSysInfo = false;
+      }
     }
 
-    async function fetchJobs() {
+    async function fetchJobs(forceRender = false) {
+      if (isFetchingJobs && !forceRender) return;
+      isFetchingJobs = true;
       try {
-        const [jobsRes, readyRes] = await Promise.all([
-          fetch('/api/jobs'),
-          fetch('/api/ready-posts').catch(() => null),
-        ]);
+        const jobsRes = await fetch('/api/jobs');
+        if (!jobsRes.ok) return;
         const data = await jobsRes.json();
-        const jobsList = data.jobs || [];
-        const existingIds = new Set(jobsList.map((j) => j.id));
-        const existingHeadlines = new Set(
-          jobsList.map((j) => (j.result?.headline || '').trim()).filter(Boolean)
-        );
-
-        if (readyRes && readyRes.ok) {
-          const rData = await readyRes.json();
-          const posts = rData.posts || [];
-          posts.forEach((p) => {
-            const pid = p.id || '';
-            const pTitle = (p.topic_title || '').trim();
-            if (!pid || existingIds.has(pid) || existingIds.has(`vault_${pid}`) || existingHeadlines.has(pTitle)) {
-              return;
-            }
-            const flatArticles = [];
-            if (Array.isArray(p.style_variants) && p.style_variants.length > 0) {
-              p.style_variants.forEach((sv) => {
-                (sv.items || []).forEach((it) => {
-                  flatArticles.push({
-                    style_id: sv.style_id || 'skill_set_5',
-                    angle_type: (it.type || '').includes('บิด') ? 'spin' : 'normal',
-                    label: it.type || 'มุมปกติ',
-                    title: it.title || pTitle,
-                    content: it.content || '',
-                  });
-                });
-              });
-            } else if (Array.isArray(p.items)) {
-              p.items.forEach((it) => {
-                flatArticles.push({
-                  style_id: 'skill_set_5',
-                  angle_type: (it.type || '').includes('บิด') ? 'spin' : 'normal',
-                  label: it.type || 'มุมปกติ',
-                  title: it.title || pTitle,
-                  content: it.content || '',
-                });
-              });
-            }
-            jobsList.push({
-              id: pid,
-              status: 'completed',
-              employee_name: p.employee_name || 'คลังข่าวพร้อมโพสต์',
-              created_at: p.created_at || '',
-              output_mode: 'normal_1_spin_1',
-              skill_set: 'all_5_styles',
-              urls: (p.source_links || []).map((l) => l.url).filter(Boolean),
-              focus_instruction: p.cover_headline ? `พาดหัวปก: ${p.cover_headline}` : '',
-              result: {
-                headline: p.topic_num ? `[ข่าวที่ ${p.topic_num}] ${pTitle}` : pTitle,
-                skill_set: 'all_5_styles',
-                articles: flatArticles,
-                uploaded_images: p.cover_url ? [p.cover_url] : [],
-                audit_tag: '✅ ถอดครบทั้ง 5 แบบสกิล (พร้อมปกข่าว 1080x1350)',
-              },
-            });
-            existingIds.add(pid);
-            if (pTitle) existingHeadlines.add(pTitle);
-          });
-        }
-
-        allJobs = jobsList;
-        renderJobs();
-      } catch (e) {}
+        allJobs = data.jobs || [];
+        renderJobs(forceRender);
+      } catch (e) {
+      } finally {
+        isFetchingJobs = false;
+      }
     }
 
     fetchSystemInfo();
-    fetchJobs();
+    fetchJobs(true);
     setInterval(() => {
       fetchSystemInfo();
-      fetchJobs();
+      fetchJobs(false);
     }, 3000);
   </script>
 </body>

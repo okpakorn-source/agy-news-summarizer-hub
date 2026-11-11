@@ -72,7 +72,12 @@ def is_video_url(url: str) -> bool:
     return False
 
 
-def build_contact_sheets(frames_dir: Path, output_dir: Path, max_sheets: int = 4) -> List[str]:
+def build_contact_sheets(
+    frames_dir: Path,
+    output_dir: Path,
+    max_sheets: int = 4,
+    sheet_prefix: str = "sheet_",
+) -> List[str]:
     """Build timestamped 4x4 contact sheets from extracted 1fps frames."""
     frames = sorted(glob.glob(str(frames_dir / "frame_*.jpg")))
     if not frames:
@@ -92,23 +97,35 @@ def build_contact_sheets(frames_dir: Path, output_dir: Path, max_sheets: int = 4
         chunk = selected[sheet_idx:sheet_idx + 16]
         if not chunk:
             continue
-        imgs = [Image.open(p) for p in chunk]
+        imgs: List[Image.Image] = []
+        for p in chunk:
+            try:
+                with Image.open(p) as raw_im:
+                    imgs.append(raw_im.convert("RGB").copy())
+            except Exception:
+                continue
+        if not imgs:
+            continue
         w, h = imgs[0].size
-        rows = (len(chunk) + 3) // 4
+        rows = (len(imgs) + 3) // 4
         grid = Image.new("RGB", (w * 4, h * rows), (15, 23, 42))
         draw = ImageDraw.Draw(grid)
         for i, (im, fpath) in enumerate(zip(imgs, chunk)):
             gx, gy = (i % 4) * w, (i // 4) * h
+            if im.size != (w, h):
+                im = im.resize((w, h))
             grid.paste(im, (gx, gy))
+            im.close()
             m = re.search(r"frame_(\d+)\.jpg", os.path.basename(fpath))
             sec = int(m.group(1)) if m else (sheet_idx + i + 1)
             mins, secs = divmod(sec, 60)
             label = f"{mins}:{secs:02d} ({sec}s)"
             draw.rectangle([gx + 6, gy + 6, gx + 145, gy + 42], fill=(0, 0, 0))
             draw.text((gx + 14, gy + 12), label, fill=(255, 230, 0))
-        out_name = f"sheet_{sheet_idx // 16 + 1}.jpg"
+        out_name = f"{sheet_prefix}{sheet_idx // 16 + 1}.jpg"
         out_path = output_dir / out_name
         grid.save(str(out_path), quality=88)
+        grid.close()
         sheet_paths.append(out_name)
 
     return sheet_paths
@@ -637,63 +654,159 @@ async def run_subprocess(cmd: List[str], cwd: Path, timeout: int = 180) -> subpr
     )
 
 
+def _kill_process_tree(proc: subprocess.Popen) -> None:
+    try:
+        if os.name == "nt":
+            subprocess.run(
+                ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
+                capture_output=True,
+                timeout=8,
+            )
+        else:
+            proc.terminate()
+            proc.wait(timeout=3)
+    except Exception:
+        try:
+            proc.kill()
+        except Exception:
+            pass
+
+
 def _run_agy_sync_with_watcher(cmd: List[str], cwd: Path, result_json_path: Path, timeout: int = 480) -> subprocess.CompletedProcess:
-    """Run agy.exe and watch for result.json creation so we return immediately once write_file completes."""
+    """Run agy.exe and watch for result.json creation without pipe buffer deadlocks."""
     import time
     env = os.environ.copy()
     env["PYTHONIOENCODING"] = "utf-8"
+
+    # Remove stale result.json (e.g. on job retry) so watcher waits for fresh output
+    try:
+        if result_json_path.exists():
+            result_json_path.unlink()
+    except Exception:
+        pass
+
+    stdout_path = cwd / "agy_stdout.log"
+    stderr_path = cwd / "agy_stderr.log"
+    stdout_f = open(stdout_path, "w", encoding="utf-8", errors="replace")
+    stderr_f = open(stderr_path, "w", encoding="utf-8", errors="replace")
+
+    start_ts = time.time()
     proc = subprocess.Popen(
         cmd,
         cwd=str(cwd),
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        stdout=stdout_f,
+        stderr=stderr_f,
         text=True,
         encoding="utf-8",
         errors="replace",
         env=env,
     )
-    start_ts = time.time()
+
+    def _read_logs() -> tuple[str, str]:
+        try:
+            stdout_f.flush()
+            stderr_f.flush()
+            stdout_f.close()
+            stderr_f.close()
+        except Exception:
+            pass
+        out_txt = stdout_path.read_text(encoding="utf-8", errors="replace") if stdout_path.exists() else ""
+        err_txt = stderr_path.read_text(encoding="utf-8", errors="replace") if stderr_path.exists() else ""
+        return out_txt, err_txt
+
     last_stable_check = 0.0
-    while True:
-        ret = proc.poll()
-        if ret is not None:
-            out, err = proc.communicate()
-            return subprocess.CompletedProcess(cmd, ret, out, err)
+    try:
+        while True:
+            ret = proc.poll()
+            if ret is not None:
+                out_txt, err_txt = _read_logs()
+                return subprocess.CompletedProcess(cmd, ret, out_txt, err_txt)
 
-        now = time.time()
-        elapsed = now - start_ts
-        if elapsed > timeout:
-            try:
-                proc.kill()
-            except Exception:
-                pass
-            raise subprocess.TimeoutExpired(cmd, timeout)
+            now = time.time()
+            elapsed = now - start_ts
+            if elapsed > timeout:
+                _kill_process_tree(proc)
+                _read_logs()
+                raise subprocess.TimeoutExpired(cmd, timeout)
 
-        if now - last_stable_check >= 1.2 and result_json_path.exists():
-            last_stable_check = now
-            try:
-                if result_json_path.stat().st_size > 200:
-                    time.sleep(0.6)
-                    with open(result_json_path, "r", encoding="utf-8") as f:
-                        parsed = json.load(f)
-                    if isinstance(parsed, dict) and (parsed.get("articles") or parsed.get("raw_news")):
-                        try:
-                            proc.terminate()
-                            proc.wait(timeout=3)
-                        except Exception:
-                            try:
-                                proc.kill()
-                            except Exception:
-                                pass
-                        return subprocess.CompletedProcess(cmd, 0, "SAVED_OK", "")
-            except Exception:
-                pass
+            if now - last_stable_check >= 1.2 and result_json_path.exists():
+                last_stable_check = now
+                try:
+                    st = result_json_path.stat()
+                    if st.st_size > 200 and st.st_mtime >= start_ts - 1.0:
+                        time.sleep(0.6)
+                        with open(result_json_path, "r", encoding="utf-8") as f:
+                            parsed = json.load(f)
+                        if isinstance(parsed, dict) and (parsed.get("articles") or parsed.get("raw_news")):
+                            _kill_process_tree(proc)
+                            _read_logs()
+                            return subprocess.CompletedProcess(cmd, 0, "SAVED_OK", "")
+                except Exception:
+                    pass
 
-        time.sleep(0.5)
+            time.sleep(0.5)
+    finally:
+        try:
+            if not stdout_f.closed:
+                stdout_f.close()
+            if not stderr_f.closed:
+                stderr_f.close()
+        except Exception:
+            pass
 
 
 async def run_agy_with_result_watcher(cmd: List[str], cwd: Path, result_json_path: Path, timeout: int = 480) -> subprocess.CompletedProcess:
     return await asyncio.to_thread(_run_agy_sync_with_watcher, cmd, cwd, result_json_path, timeout)
+
+
+def _extract_json_payload(text: str) -> Optional[Dict[str, Any]]:
+    """Safely extract a JSON object containing 'articles' or 'raw_news' from arbitrary CLI output."""
+    if not text:
+        return None
+    # Try fenced ```json blocks first
+    for m in re.finditer(r"```(?:json)?\s*(\{[\s\S]*?\})\s*```", text):
+        candidate = m.group(1).strip()
+        if '"articles"' in candidate or '"raw_news"' in candidate:
+            try:
+                obj = json.loads(candidate)
+                if isinstance(obj, dict):
+                    return obj
+            except Exception:
+                pass
+    # Scan balanced braces from each '{' that precedes "articles" or "raw_news"
+    starts = [m.start() for m in re.finditer(r"\{", text)]
+    for st_idx in reversed(starts):
+        sub = text[st_idx:]
+        if '"articles"' not in sub and '"raw_news"' not in sub:
+            continue
+        depth = 0
+        in_str = False
+        esc = False
+        for i, ch in enumerate(sub):
+            if esc:
+                esc = False
+                continue
+            if ch == "\\":
+                esc = True
+                continue
+            if ch == '"':
+                in_str = not in_str
+                continue
+            if not in_str:
+                if ch == "{":
+                    depth += 1
+                elif ch == "}":
+                    depth -= 1
+                    if depth == 0:
+                        candidate = sub[: i + 1]
+                        try:
+                            obj = json.loads(candidate)
+                            if isinstance(obj, dict) and (obj.get("articles") or obj.get("raw_news")):
+                                return obj
+                        except Exception:
+                            pass
+                        break
+    return None
 
 
 async def process_job(
@@ -717,6 +830,13 @@ async def process_job(
     job_dir.mkdir(parents=True, exist_ok=True)
     frames_dir = job_dir / "frames"
     frames_dir.mkdir(exist_ok=True)
+    image_files = list(dict.fromkeys(image_files or []))
+
+    # Clean stale result.json if retrying job
+    try:
+        (job_dir / "result.json").unlink(missing_ok=True)
+    except Exception:
+        pass
 
     extracted_meta: Dict[str, Any] = {
         "job_id": job_id,
@@ -740,17 +860,21 @@ async def process_job(
             progress_cb(f"กำลังดึงข้อมูลจากลิงก์ ({idx + 1}/{len(urls)})...", 20)
             target_url = await asyncio.to_thread(resolve_social_url, url)
             if is_video_url(target_url):
+                v_stem = "video" if idx == 0 else f"video_{idx + 1}"
+                sub_stem = "sub" if idx == 0 else f"sub_{idx + 1}"
+                sheet_prefix = "sheet_" if len(urls) == 1 else f"sheet_v{idx + 1}_"
+
                 # Also try extracting Thai subtitles/auto-captions on YouTube for fast, complete transcript of long videos
                 if any(d in target_url.lower() for d in ("youtube.com", "youtu.be")):
                     try:
                         await run_subprocess(
-                            ["yt-dlp", "--write-auto-sub", "--write-sub", "--sub-lang", "th", "--skip-download", "-o", "sub", target_url],
+                            ["yt-dlp", "--write-auto-sub", "--write-sub", "--sub-lang", "th", "--skip-download", "-o", sub_stem, target_url],
                             cwd=job_dir,
                             timeout=30,
                         )
                     except Exception:
                         pass
-                vtt_file = job_dir / "sub.th.vtt"
+                vtt_file = job_dir / f"{sub_stem}.th.vtt"
                 if vtt_file.exists():
                     try:
                         vtt_raw = vtt_file.read_text(encoding="utf-8", errors="ignore")
@@ -775,25 +899,31 @@ async def process_job(
                     except Exception:
                         pass
 
-                # Try downloading video (limit to <=15 min or first 10 min if huge)
+                # Clean previous video files with the same stem if retrying
+                for old_v in job_dir.glob(f"{v_stem}.*"):
+                    try:
+                        old_v.unlink()
+                    except Exception:
+                        pass
+
+                # Try downloading video
                 cmd = [
                     "yt-dlp",
                     "--write-info-json",
                     "--no-playlist",
-                    "-o", "video.%(ext)s",
+                    "-o", f"{v_stem}.%(ext)s",
                     target_url,
                 ]
                 try:
-                    res = await run_subprocess(cmd, cwd=job_dir, timeout=120)
+                    await run_subprocess(cmd, cwd=job_dir, timeout=120)
                 except Exception:
-                    res = None
+                    pass
 
-                info_path = job_dir / "video.info.json"
-                video_path = job_dir / "video.mp4"
+                info_path = job_dir / f"{v_stem}.info.json"
+                video_path = job_dir / f"{v_stem}.mp4"
                 if not video_path.exists():
-                    # Check if another extension was created
-                    v_candidates = glob.glob(str(job_dir / "video.*"))
-                    v_candidates = [p for p in v_candidates if not p.endswith(".json")]
+                    v_candidates = glob.glob(str(job_dir / f"{v_stem}.*"))
+                    v_candidates = [p for p in v_candidates if not p.endswith(".json") and not p.endswith(".part")]
                     if v_candidates:
                         video_path = Path(v_candidates[0])
 
@@ -831,14 +961,22 @@ async def process_job(
                     if audio_path.exists() and audio_path.stat().st_size > 1000:
                         has_audio_file = True
 
-                    # Extract 1fps frames
+                    # Clear old frames before extracting 1fps frames for this video
+                    for old_frame in frames_dir.glob("frame_*.jpg"):
+                        try:
+                            old_frame.unlink()
+                        except Exception:
+                            pass
+
                     await run_subprocess(
                         ["ffmpeg", "-y", "-i", str(video_path), "-vf", "fps=1,scale=640:-1", str(frames_dir / "frame_%03d.jpg")],
                         cwd=job_dir,
                         timeout=90,
                     )
-                    sheets = await asyncio.to_thread(build_contact_sheets, frames_dir, job_dir, 4)
-                    all_contact_sheets.extend(sheets)
+                    sheets = await asyncio.to_thread(build_contact_sheets, frames_dir, job_dir, 4, sheet_prefix)
+                    for s in sheets:
+                        if s not in all_contact_sheets:
+                            all_contact_sheets.append(s)
                 else:
                     # Fallback to webpage scrape if yt-dlp couldn't find a video (e.g. Facebook text/photo share link)
                     article_data = await asyncio.to_thread(scrape_webpage_text, url, job_dir, image_files)
@@ -847,6 +985,8 @@ async def process_job(
                 progress_cb(f"กำลังดึงเนื้อหาจากหน้าเว็บข่าว ({idx + 1}/{len(urls)})...", 35)
                 article_data = await asyncio.to_thread(scrape_webpage_text, url, job_dir, image_files)
                 extracted_meta["articles"].append(article_data)
+    image_files = list(dict.fromkeys(image_files))
+    extracted_meta["uploaded_images"] = image_files
 
     # Save metadata summary into job_dir/job_context.json
     context_file = job_dir / "job_context.json"
@@ -1138,12 +1278,7 @@ async def process_job(
 
     if not result_data:
         stdout_text = agy_res.stdout or ""
-        m = re.search(r"\{[\s\S]*(\"articles\"|\"raw_news\")[\s\S]*\}", stdout_text)
-        if m:
-            try:
-                result_data = json.loads(m.group(0))
-            except Exception:
-                pass
+        result_data = _extract_json_payload(stdout_text)
 
     if not result_data:
         raw_out = (agy_res.stdout or "").strip() or (agy_res.stderr or "ไม่สามารถประมวลผลได้")
