@@ -1,12 +1,8 @@
 __pycache__/
 *.pyc
-.env
-.env.*
 jobs_data/
 backups/
 jobs.db
 tunnel_url.txt
 .vercel/
-*secret*
-*token*
-config.json
+.env
