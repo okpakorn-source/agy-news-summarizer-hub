@@ -95,6 +95,12 @@ def parse_chat_style_submission(
     if len(leftover) >= 3:
         merged_focus = f"{merged_focus}\n{leftover}".strip() if merged_focus else leftover
 
+    if output_mode == "video_transcribe" or (skill_set or "").startswith("transcribe:"):
+        output_mode = "video_transcribe"
+        if not skill_set or not skill_set.startswith("transcribe:"):
+            skill_set = "transcribe:context,summary_time,dialogue"
+        return urls, merged_focus, output_mode, skill_set
+
     # Smart auto-detect mode if employee wrote explicit instructions in chat style or focus box
     low_focus = merged_focus.lower()
     if any(k in low_focus for k in ("1+2+1", "พี่ตูน", "เข้าใจจบในย่อหน้าแรก", "ฮุคจบในย่อหน้าแรก", "อินเนอร์ตัวละคร")):
@@ -339,7 +345,12 @@ async def background_worker(
                 skill_set=skill_set,
             )
             result = await asyncio.to_thread(upload_job_media_to_cloud, job_id, job_dir, result)
-            await asyncio.to_thread(update_job_progress, job_id, "completed", "สรุปเนื้อข่าวครบทั้ง 2 แนวหลัก (4 กล่อง • มาตรฐาน 98/100) เรียบร้อย!", 100, result)
+            done_msg = (
+                "ถอดบทสนทนาและแยกประเด็นวิดีโอพร้อมแจ้งช่วงนาทีเรียบร้อยแล้ว!"
+                if output_mode == "video_transcribe"
+                else "สรุปเนื้อข่าวครบทั้ง 2 แนวหลัก (4 กล่อง • มาตรฐาน 98/100) เรียบร้อย!"
+            )
+            await asyncio.to_thread(update_job_progress, job_id, "completed", done_msg, 100, result)
         except Exception as e:
             s_err = str(e)
             if isinstance(e, subprocess.TimeoutExpired) or "timed out" in s_err.lower():
@@ -368,7 +379,7 @@ async def supabase_cloud_poller():
             await asyncio.to_thread(update_host_heartbeat, f"http://{lan_ip}:8080", VERCEL_PUBLIC_URL)
             cloud_jobs = await asyncio.to_thread(list_jobs_from_supabase, 80)
 
-            for cj in cloud_jobs:
+            for cj in reversed(cloud_jobs):
                 jid = cj.get("id")
                 if not jid:
                     continue
@@ -432,6 +443,7 @@ async def supabase_cloud_poller():
                     )
                     conn.commit()
                     conn.close()
+                    await asyncio.to_thread(sync_row_to_supabase, jid)
 
                     asyncio.create_task(
                         background_worker(
@@ -539,14 +551,18 @@ async def system_info():
 
 
 @app.get("/api/check-duplicate")
-async def check_duplicate(url: str):
+async def check_duplicate(url: str, job_type: str = ""):
     if not url.strip():
         return {"duplicate": False}
     norm = normalize_url(url)
+    want_transcribe = job_type == "transcribe"
 
     if IS_VERCEL:
         jobs = await asyncio.to_thread(list_jobs_from_supabase, 80)
         for j in jobs:
+            is_tr = j.get("output_mode") == "video_transcribe" or str(j.get("skill_set") or "").startswith("transcribe:")
+            if job_type and is_tr != want_transcribe:
+                continue
             for existing_u in j.get("urls", []):
                 if normalize_url(existing_u) == norm:
                     res = j.get("result") or {}
@@ -561,10 +577,13 @@ async def check_duplicate(url: str):
         return {"duplicate": False}
 
     conn = get_db()
-    rows = conn.execute("SELECT id, employee_name, urls_json, created_at, status, result_json FROM jobs ORDER BY created_at DESC LIMIT 100").fetchall()
+    rows = conn.execute("SELECT id, employee_name, urls_json, output_mode, skill_set, created_at, status, result_json FROM jobs ORDER BY created_at DESC LIMIT 100").fetchall()
     conn.close()
     for r in rows:
         try:
+            is_tr = (r["output_mode"] == "video_transcribe") or str(r["skill_set"] or "").startswith("transcribe:")
+            if job_type and is_tr != want_transcribe:
+                continue
             u_list = json.loads(r["urls_json"] or "[]")
             for existing_u in u_list:
                 if normalize_url(existing_u) == norm:

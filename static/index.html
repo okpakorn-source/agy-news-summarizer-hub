@@ -107,8 +107,40 @@
     </div>
   </header>
 
-  <!-- Main Content -->
-  <main class="max-w-7xl w-full mx-auto px-4 sm:px-5 py-6 grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 items-start">
+  <!-- Top System Workspace Switcher (News Summarizer vs Video Transcript & Breakdown System) -->
+  <div class="max-w-7xl w-full mx-auto px-4 sm:px-5 pt-4">
+    <div class="bg-slate-900/95 border border-slate-800 rounded-2xl p-2 grid grid-cols-1 sm:grid-cols-2 gap-2 shadow-lg">
+      <button type="button" id="ws-btn-news" onclick="switchWorkspaceMode('news')"
+        class="flex items-center justify-between gap-3 px-4 py-3 rounded-xl text-left transition bg-emerald-500 text-slate-950 font-bold shadow-md">
+        <div class="flex items-center gap-3 min-w-0">
+          <span class="text-xl shrink-0">📰</span>
+          <div class="min-w-0">
+            <div class="text-xs sm:text-sm font-bold truncate">ระบบสั่งทำข่าว & บิดประเด็นไวรัล</div>
+            <div id="ws-sub-news" class="text-[11px] text-slate-900/80 font-medium truncate">สรุปข่าว 2 แนวหลัก • จับคู่คลัง 254 DNA Prompts • คลังข่าวทีม</div>
+          </div>
+        </div>
+        <span id="ws-badge-news" class="shrink-0 px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-slate-950/20 text-slate-950">0</span>
+      </button>
+
+      <button type="button" id="ws-btn-transcribe" onclick="switchWorkspaceMode('transcribe')"
+        class="flex items-center justify-between gap-3 px-4 py-3 rounded-xl text-left transition bg-slate-950/80 hover:bg-slate-800/80 text-slate-200 border border-slate-800">
+        <div class="flex items-center gap-3 min-w-0">
+          <span class="text-xl shrink-0">🎙️</span>
+          <div class="min-w-0">
+            <div class="text-xs sm:text-sm font-bold flex items-center gap-1.5 truncate">
+              <span>ระบบถอดบทสนทนา & แยกประเด็นวิดีโอ</span>
+              <span class="px-1.5 py-0.2 rounded bg-sky-500/20 text-sky-300 border border-sky-500/40 text-[10px] font-bold">NEW</span>
+            </div>
+            <div id="ws-sub-transcribe" class="text-[11px] text-slate-400 truncate">วางลิงก์ YouTube / Reels / TikTok • ติ๊กเลือกอ่านบริบท / สรุปแจ้งนาที / ถอดบทพูดเข้าใจง่าย</div>
+          </div>
+        </div>
+        <span id="ws-badge-transcribe" class="shrink-0 px-2.5 py-0.5 rounded-full text-xs font-bold bg-sky-500/20 text-sky-300 border border-sky-500/30">0</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Main Content 1: News Summarizer Workspace -->
+  <main id="workspace-news" class="max-w-7xl w-full mx-auto px-4 sm:px-5 py-5 grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 items-start">
 
     <!-- Left Column: Chat-Like Request Form (5 cols on lg for comfortable typing) -->
     <section class="lg:col-span-5 lg:sticky lg:top-20">
@@ -310,6 +342,243 @@
     </section>
   </main>
 
+  <!-- Main Content 2: Video Transcript & Context Breakdown Workspace -->
+  <main id="workspace-transcribe" class="hidden max-w-7xl w-full mx-auto px-4 sm:px-5 py-5 grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 items-start">
+
+    <!-- Left Column: Video Transcript & Context Request Form (5 cols) -->
+    <section class="lg:col-span-5 lg:sticky lg:top-20">
+      <div class="bg-slate-900/95 border border-sky-500/30 rounded-2xl p-5 shadow-xl">
+        <div class="flex items-center justify-between mb-3.5">
+          <div>
+            <h2 class="text-sm font-bold text-white flex items-center gap-1.5">
+              <span>🎙️ ถอดบทสนทนา & แยกประเด็นวิดีโอ</span>
+              <span class="px-2 py-0.5 rounded-md bg-sky-500/20 text-sky-300 border border-sky-500/30 text-[10px] font-bold">YouTube • Reels • TikTok</span>
+            </h2>
+            <p class="text-[11px] text-slate-400 mt-0.5">วางลิงก์คลิปแล้วติ๊กเลือกสิ่งที่ต้องการถอด เพื่อให้พนักงานหยิบไปต่อยอดได้ทันที</p>
+          </div>
+          <button type="button" onclick="clearTranscribeForm()" class="text-xs text-slate-400 hover:text-white bg-slate-800/80 px-2.5 py-1 rounded-lg transition">ล้างฟอร์ม</button>
+        </div>
+
+        <form id="transcribe-form" onsubmit="handleTranscribeSubmit(event)" class="space-y-3.5">
+
+          <!-- 1. Video URL Input -->
+          <div>
+            <div class="flex items-center justify-between mb-1.5">
+              <label for="tr-urls-input" class="block text-xs font-semibold text-slate-200">
+                1. วางลิงก์วิดีโอที่ต้องการถอด <span class="text-sky-400 font-normal">(YouTube / Reels / TikTok / IG)</span>
+              </label>
+              <span id="tr-platform-badge" class="hidden px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-500/20 text-sky-300 border border-sky-500/40">
+                🎬 วิดีโอ
+              </span>
+            </div>
+            <textarea id="tr-urls-input" rows="2"
+              oninput="handleTranscribeUrlInput(this.value)"
+              placeholder="วางลิงก์ YouTube, YouTube Shorts, Facebook Reels/Watch, TikTok หรือ Instagram Reels ที่นี่..."
+              class="w-full bg-slate-950 border border-slate-800 focus:border-sky-500 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none transition"></textarea>
+
+            <!-- Duplicate Alert in Transcribe Vault -->
+            <div id="tr-dup-alert" class="hidden mt-2 bg-amber-500/10 border border-amber-500/30 rounded-xl p-2.5 text-xs text-amber-200 flex items-center justify-between gap-2">
+              <span>⚠️ คลิปนี้เคยถอดไว้ในคลังแล้วโดย <strong id="tr-dup-emp"></strong> (เปิดดูหรือส่งถอดใหม่ได้)</span>
+              <button type="button" id="tr-dup-view-btn" class="shrink-0 bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold px-2.5 py-1 rounded-lg">
+                ดูผลลัพธ์เดิม
+              </button>
+            </div>
+          </div>
+
+          <!-- 2. Multi-Select Checkboxes for Extraction Options -->
+          <div class="space-y-2">
+            <div class="flex flex-wrap items-center justify-between gap-1.5">
+              <label class="block text-xs font-semibold text-slate-200">
+                2. ติ๊กเลือกรูปแบบที่ต้องการถอด <span class="text-slate-400 font-normal">(เลือกกี่ข้อก็ได้ หรือติ๊กครบทุกแบบ)</span>
+              </label>
+              <div class="flex items-center gap-1">
+                <button type="button" onclick="setTranscribeCheckboxes(true, true, true)"
+                  class="text-[10px] bg-sky-500/20 hover:bg-sky-500 text-sky-300 hover:text-slate-950 border border-sky-500/40 font-bold px-2 py-0.5 rounded-lg transition">
+                  ✨ ติ๊กถอดครบทุกแบบ
+                </button>
+              </div>
+            </div>
+
+            <!-- Checkbox 1: Context Reading -->
+            <label for="tr-opt-context" id="tr-card-context"
+              class="flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition bg-sky-500/10 border-sky-500/50 hover:border-sky-400">
+              <input id="tr-opt-context" type="checkbox" checked onchange="updateTranscribeCheckboxStyles()"
+                class="mt-0.5 w-4 h-4 rounded accent-sky-400 cursor-pointer shrink-0" />
+              <div class="min-w-0 flex-1">
+                <div class="flex items-center justify-between gap-2">
+                  <span class="text-xs font-bold text-white">🎬 การอ่านบริบทคลิป (Visual & Situational Context)</span>
+                  <span class="text-[10px] px-1.5 py-0.2 rounded bg-sky-500/20 text-sky-300 font-semibold shrink-0">อ่านภาพ+บรรยากาศ</span>
+                </div>
+                <p class="text-[11px] text-slate-300 mt-0.5 leading-relaxed">
+                  วิเคราะห์ภาพรวมเหตุการณ์ ผู้พูด น้ำเสียง อารมณ์ สถานที่ ข้อความบนหน้าจอ และชี้เป้าจุดขายสำคัญในคลิป
+                </p>
+              </div>
+            </label>
+
+            <!-- Checkbox 2: News Summary + Topic Breakdown with Timestamps -->
+            <label for="tr-opt-summary-time" id="tr-card-summary-time"
+              class="flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition bg-emerald-500/10 border-emerald-500/50 hover:border-emerald-400">
+              <input id="tr-opt-summary-time" type="checkbox" checked onchange="updateTranscribeCheckboxStyles()"
+                class="mt-0.5 w-4 h-4 rounded accent-emerald-400 cursor-pointer shrink-0" />
+              <div class="min-w-0 flex-1">
+                <div class="flex items-center justify-between gap-2">
+                  <span class="text-xs font-bold text-white">📑 เนื้อข่าวแบบเขียนสรุป + แยกประเด็นพร้อมแจ้งช่วงนาที</span>
+                  <span class="text-[10px] px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 font-semibold shrink-0">ระบุ [MM:SS]</span>
+                </div>
+                <p class="text-[11px] text-slate-300 mt-0.5 leading-relaxed">
+                  เขียนสรุปเนื้อข่าวพร้อมใช้ทันที และแตกประเด็นสำคัญออกเป็นข้อๆ พร้อมแจ้งช่วงนาที <code>[00:00 - 00:45]</code> ชัดเจน
+                </p>
+              </div>
+            </label>
+
+            <!-- Checkbox 3: Easy-to-Read Conversational Transcript -->
+            <label for="tr-opt-dialogue" id="tr-card-dialogue"
+              class="flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition bg-amber-500/10 border-amber-500/50 hover:border-amber-400">
+              <input id="tr-opt-dialogue" type="checkbox" checked onchange="updateTranscribeCheckboxStyles()"
+                class="mt-0.5 w-4 h-4 rounded accent-amber-400 cursor-pointer shrink-0" />
+              <div class="min-w-0 flex-1">
+                <div class="flex items-center justify-between gap-2">
+                  <span class="text-xs font-bold text-white">💬 ถอดบทพูดจากคลิปออกมาแบบเข้าใจง่าย (พร้อมต่อยอด)</span>
+                  <span class="text-[10px] px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 font-semibold shrink-0">บทพูด+ประโยคเด็ด</span>
+                </div>
+                <p class="text-[11px] text-slate-300 mt-0.5 leading-relaxed">
+                  ถอดคำพูดจริงเรียงตามช่วงนาที ตัดคำฟุ่มเฟือยออกให้อ่านเข้าใจง่าย แยกผู้พูดชัดเจน พร้อมคัดโควทประโยคเด็ดให้หยิบไปต่อยอดได้ทันที
+                </p>
+              </div>
+            </label>
+
+            <!-- Quick Preset Pills -->
+            <div class="flex flex-wrap gap-1.5 pt-0.5">
+              <button type="button" onclick="setTranscribeCheckboxes(true, true, true)"
+                class="text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-2.5 py-1 rounded-lg transition">
+                ☑️ เอาครบทั้ง 3 แบบ
+              </button>
+              <button type="button" onclick="setTranscribeCheckboxes(false, true, true)"
+                class="text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 px-2.5 py-1 rounded-lg transition">
+                📑+💬 สรุปแยกประเด็นนาที + ถอดบทพูด
+              </button>
+              <button type="button" onclick="setTranscribeCheckboxes(false, false, true)"
+                class="text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 px-2.5 py-1 rounded-lg transition">
+                💬 เฉพาะถอดบทพูดเข้าใจง่าย
+              </button>
+              <button type="button" onclick="setTranscribeCheckboxes(false, true, false)"
+                class="text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 px-2.5 py-1 rounded-lg transition">
+                📑 เฉพาะเนื้อข่าวสรุป+แจ้งนาที
+              </button>
+              <button type="button" onclick="setTranscribeCheckboxes(true, false, false)"
+                class="text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 px-2.5 py-1 rounded-lg transition">
+                🎬 เฉพาะอ่านบริบทคลิป
+              </button>
+            </div>
+          </div>
+
+          <!-- 3. Optional Custom Focus / Note -->
+          <div>
+            <div class="flex items-center justify-between mb-1.5">
+              <label for="tr-focus-instruction" class="block text-xs font-semibold text-slate-200">
+                3. 💬 จุดที่อยากให้เจาะลึกเป็นพิเศษ <span class="text-slate-400 font-normal">(เว้นว่างได้)</span>
+              </label>
+            </div>
+            <textarea id="tr-focus-instruction" rows="2"
+              placeholder="เช่น เน้นแกะคำพูดช่วงนาทีที่พูดถึงตัวเลขเงิน / แยกผู้พูดแต่ละคนให้ชัดเจน / สรุปให้พร้อมนำไปเขียนข่าวต่อ..."
+              class="w-full bg-slate-950 border border-slate-800 focus:border-sky-500 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none transition leading-relaxed"></textarea>
+            <div class="flex flex-wrap gap-1.5 mt-1.5">
+              <button type="button" onclick="appendTranscribeChip('เน้นแกะประโยคเด็ดและคำพูดสำคัญให้ครบทุกช่วงนาที')"
+                class="text-[10px] bg-amber-500/15 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 px-2 py-1 rounded-lg transition">
+                🔥 เน้นแกะประโยคเด็ดทุกช่วงนาที
+              </button>
+              <button type="button" onclick="appendTranscribeChip('แยกผู้พูดแต่ละคนให้ชัดเจนและระบุอารมณ์น้ำเสียงด้วย')"
+                class="text-[10px] bg-sky-500/15 hover:bg-sky-500/30 text-sky-300 border border-sky-500/30 px-2 py-1 rounded-lg transition">
+                👥 แยกผู้พูดแต่ละคนให้ชัดเจน
+              </button>
+              <button type="button" onclick="appendTranscribeChip('เจาะตัวเลข สถานที่ และลำดับเหตุการณ์ตามนาทีให้ละเอียด')"
+                class="text-[10px] bg-emerald-500/15 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 px-2 py-1 rounded-lg transition">
+                ⏱️ เจาะตัวเลข+ลำดับเวลาละเอียด
+              </button>
+            </div>
+          </div>
+
+          <!-- Creator Attribution Banner -->
+          <div class="bg-sky-500/10 border border-sky-500/30 rounded-xl px-3.5 py-2 flex items-center justify-between gap-2 text-xs">
+            <div class="text-slate-300">
+              👤 บันทึกลงคลังถอดคลิปทีมในชื่อ: <strong id="tr-form-creator-badge" class="text-sky-300 font-bold">-</strong>
+            </div>
+            <button type="button" onclick="openNicknameModal()" class="text-[11px] text-amber-300 hover:underline font-medium shrink-0">
+              ✏️ เปลี่ยนชื่อเล่น
+            </button>
+          </div>
+
+          <button id="tr-submit-btn" type="submit"
+            class="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-sky-500 to-emerald-500 hover:from-sky-400 hover:to-emerald-400 text-slate-950 font-bold text-sm shadow-lg shadow-sky-500/20 transition flex items-center justify-center gap-2">
+            <span>🎙️ เริ่มถอดบทสนทนา & แยกประเด็นวิดีโอ</span>
+          </button>
+        </form>
+      </div>
+    </section>
+
+    <!-- Right Column: Multi-Employee Video Transcript Vault (7 cols) -->
+    <section class="lg:col-span-7 flex flex-col gap-3">
+
+      <!-- Vault Header & Filters -->
+      <div class="bg-slate-900/95 border border-sky-500/30 rounded-2xl p-3.5 space-y-2.5 shadow-lg">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div class="flex flex-wrap items-center gap-1.5">
+            <button id="tr-tab-all" onclick="setTranscribeFilterMode('ALL')"
+              class="px-3 py-1.5 rounded-xl text-xs font-bold bg-sky-500 text-slate-950 shadow transition">
+              📚 คลังงานถอดคลิปทีม (<span id="tr-count-all">0</span>)
+            </button>
+            <button id="tr-tab-mine" onclick="setTranscribeFilterMode('MINE')"
+              class="px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-800/80 text-slate-300 hover:bg-slate-700 transition">
+              👤 งานถอดของ <span id="tr-tab-mine-name">ฉัน</span> (<span id="tr-count-mine">0</span>)
+            </button>
+          </div>
+
+          <div class="flex items-center gap-1.5">
+            <select id="tr-emp-filter" onchange="renderTranscribeJobs(true)"
+              class="bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-sky-500">
+              <option value="ALL">👥 พนักงานทุกคน</option>
+            </select>
+            <button onclick="collapseAllTranscribe()" class="text-xs text-slate-400 hover:text-white bg-slate-800/70 hover:bg-slate-800 px-2.5 py-1.5 rounded-xl border border-slate-700/60 transition">
+              ย่อทั้งหมด
+            </button>
+          </div>
+        </div>
+
+        <div class="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-800/80">
+          <!-- Platform Filter Pills -->
+          <div class="flex flex-wrap items-center gap-1">
+            <button type="button" id="tr-plat-ALL" onclick="setTranscribePlatformFilter('ALL')"
+              class="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-sky-500/20 text-sky-300 border border-sky-500/40 transition">
+              ทั้งหมด
+            </button>
+            <button type="button" id="tr-plat-YouTube" onclick="setTranscribePlatformFilter('YouTube')"
+              class="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-slate-950 text-slate-400 border border-slate-800 hover:text-white transition">
+              ▶️ YouTube
+            </button>
+            <button type="button" id="tr-plat-Facebook" onclick="setTranscribePlatformFilter('Facebook')"
+              class="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-slate-950 text-slate-400 border border-slate-800 hover:text-white transition">
+              📱 Reels / FB
+            </button>
+            <button type="button" id="tr-plat-TikTok" onclick="setTranscribePlatformFilter('TikTok')"
+              class="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-slate-950 text-slate-400 border border-slate-800 hover:text-white transition">
+              🎵 TikTok
+            </button>
+          </div>
+
+          <!-- Search Box -->
+          <input id="tr-search-box" type="text" oninput="renderTranscribeJobs(true)"
+            placeholder="🔍 ค้นหาคำพูดในคลิป, ประเด็น, ชื่อเรื่อง, ชื่อพนักงาน..."
+            class="w-full sm:w-64 bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-sky-500" />
+        </div>
+      </div>
+
+      <!-- Video Transcript Vault List -->
+      <div id="tr-jobs-container" class="space-y-3">
+        <div class="text-center py-12 text-slate-500 text-sm">กำลังโหลดคลังงานถอดบทสนทนาวิดีโอ...</div>
+      </div>
+    </section>
+  </main>
+
   <!-- Nickname Entry Modal (Shown on first visit or when changing nickname) -->
   <div id="nickname-modal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
     <div class="w-full max-w-md bg-slate-900 border border-emerald-500/40 rounded-2xl p-6 shadow-2xl space-y-4" onclick="event.stopPropagation()">
@@ -455,6 +724,7 @@
       spin_only_1: '🎯 บิดประเด็นล้วน 1',
       viral_3_para: '📝 ข่าวสั้น 3 ย่อหน้า (254 DNA)',
       strict_clip_only: '🎬 เฉพาะในคลิป 100%',
+      video_transcribe: '🎙️ ถอดบทสนทนา & แยกประเด็นวิดีโอ',
     };
 
     const SKILL_SET_LABELS = {
@@ -467,11 +737,70 @@
       skill_set_4: '4️⃣ แบบที่ 4: หมัดหนักเทียบตัวเลข (1+2+1)',
       skill_set_5: '⭐ แบบที่ 5: ไฮบริดเล่าลื่นข้อมูลแน่น (1+3+1)',
       skill_set_6: '💡 แบบที่ 6: ลูกเล่นประยุกต์ข้อมูล (1+3+1)',
+      transcribe_context: '🎬 การอ่านบริบทคลิป',
+      transcribe_summary_time: '📑 สรุปเนื้อข่าว + แยกประเด็น (แจ้งช่วงนาที)',
+      transcribe_dialogue: '💬 ถอดบทพูดเข้าใจง่าย (พร้อมต่อยอด)',
     };
+
+    let activeWorkspaceMode = localStorage.getItem('agy_workspace_mode') === 'transcribe' ? 'transcribe' : 'news';
+    let transcribeFilterMode = 'ALL';
+    let transcribePlatformFilter = 'ALL';
+    let trDupTimeout = null;
+    let lastTranscribeSignature = '';
+
+    function isTranscribeJob(job) {
+      if (!job) return false;
+      const sk = String(job.skill_set || job.result?.skill_set || '');
+      return job.output_mode === 'video_transcribe' || sk.startsWith('transcribe:');
+    }
+
+    function switchWorkspaceMode(mode) {
+      activeWorkspaceMode = mode === 'transcribe' ? 'transcribe' : 'news';
+      localStorage.setItem('agy_workspace_mode', activeWorkspaceMode);
+      const wsNews = document.getElementById('workspace-news');
+      const wsTr = document.getElementById('workspace-transcribe');
+      const btnNews = document.getElementById('ws-btn-news');
+      const btnTr = document.getElementById('ws-btn-transcribe');
+      const subNews = document.getElementById('ws-sub-news');
+      const subTr = document.getElementById('ws-sub-transcribe');
+      const badgeNews = document.getElementById('ws-badge-news');
+      const badgeTr = document.getElementById('ws-badge-transcribe');
+
+      if (activeWorkspaceMode === 'transcribe') {
+        if (wsNews) wsNews.classList.add('hidden');
+        if (wsTr) wsTr.classList.remove('hidden');
+        if (btnNews) btnNews.className = 'flex items-center justify-between gap-3 px-4 py-3 rounded-xl text-left transition bg-slate-950/80 hover:bg-slate-800/80 text-slate-200 border border-slate-800';
+        if (subNews) subNews.className = 'text-[11px] text-slate-400 truncate';
+        if (badgeNews) badgeNews.className = 'shrink-0 px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30';
+
+        if (btnTr) btnTr.className = 'flex items-center justify-between gap-3 px-4 py-3 rounded-xl text-left transition bg-gradient-to-r from-sky-500 to-emerald-500 text-slate-950 font-bold shadow-md';
+        if (subTr) subTr.className = 'text-[11px] text-slate-900/80 font-medium truncate';
+        if (badgeTr) badgeTr.className = 'shrink-0 px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-slate-950/20 text-slate-950';
+      } else {
+        if (wsTr) wsTr.classList.add('hidden');
+        if (wsNews) wsNews.classList.remove('hidden');
+        if (btnNews) btnNews.className = 'flex items-center justify-between gap-3 px-4 py-3 rounded-xl text-left transition bg-emerald-500 text-slate-950 font-bold shadow-md';
+        if (subNews) subNews.className = 'text-[11px] text-slate-900/80 font-medium truncate';
+        if (badgeNews) badgeNews.className = 'shrink-0 px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-slate-950/20 text-slate-950';
+
+        if (btnTr) btnTr.className = 'flex items-center justify-between gap-3 px-4 py-3 rounded-xl text-left transition bg-slate-950/80 hover:bg-slate-800/80 text-slate-200 border border-slate-800';
+        if (subTr) subTr.className = 'text-[11px] text-slate-400 truncate';
+        if (badgeTr) badgeTr.className = 'shrink-0 px-2.5 py-0.5 rounded-full text-xs font-bold bg-sky-500/20 text-sky-300 border border-sky-500/30';
+      }
+      renderJobs(true);
+      renderTranscribeJobs(true);
+    }
 
     function getJobSkillSetTag(job) {
       const res = job?.result || {};
       const sk = job?.skill_set || res.skill_set || 'all_5_styles';
+      if (String(sk).startsWith('transcribe:')) {
+        const parts = [];
+        if (sk.includes('context')) parts.push('🎬 บริบทคลิป');
+        if (sk.includes('summary_time')) parts.push('📑 สรุป+แจ้งนาที');
+        if (sk.includes('dialogue')) parts.push('💬 บทพูดเข้าใจง่าย');
+        return parts.length ? parts.join(' + ') : '🎙️ ถอดบทสนทนาวิดีโอ';
+      }
       return SKILL_SET_LABELS[sk] || res.skill_set_short || '🔥 ครบ 2 แนวหลัก (3 ย่อหน้า 254 DNA + ลูกเล่น 1+3+1)';
     }
 
@@ -546,6 +875,7 @@
       if (event) event.stopPropagation();
       selectedJobStyle[jobId] = styleId;
       renderJobs(true);
+      renderTranscribeJobs(true);
     }
 
     function isPlaceholderNickname(val) {
@@ -562,8 +892,12 @@
       }
       const formBadge = document.getElementById('form-creator-badge');
       if (formBadge) formBadge.textContent = disp;
+      const trFormBadge = document.getElementById('tr-form-creator-badge');
+      if (trFormBadge) trFormBadge.textContent = disp;
       const tabMineName = document.getElementById('tab-mine-name');
       if (tabMineName) tabMineName.textContent = clean || 'ฉัน';
+      const trTabMineName = document.getElementById('tr-tab-mine-name');
+      if (trTabMineName) trTabMineName.textContent = clean || 'ฉัน';
       const badge = document.getElementById('current-emp-badge');
       if (badge) badge.textContent = disp;
     }
@@ -592,8 +926,9 @@
       syncNicknameUI(val);
       const modal = document.getElementById('nickname-modal');
       if (modal) modal.classList.add('hidden');
-      showToast(`👋 ยินดีต้อนรับคุณ "${val}"! ข่าวที่คุณถอดจะระบุชื่อ "${val}" ในคลังงานอัตโนมัติ`);
-      renderJobs();
+      showToast(`👋 ยินดีต้อนรับคุณ "${val}"! งานที่คุณถอดจะระบุชื่อ "${val}" ในคลังงานอัตโนมัติ`);
+      renderJobs(true);
+      renderTranscribeJobs(true);
     }
 
     function saveEmployeeName() {
@@ -603,7 +938,8 @@
         localStorage.setItem('agy_nickname_confirmed', 'true');
       }
       syncNicknameUI(val);
-      renderJobs();
+      renderJobs(true);
+      renderTranscribeJobs(true);
     }
 
     const savedEmp = localStorage.getItem('agy_employee_name') || '';
@@ -802,12 +1138,19 @@
         expandedJobs.add(jobId);
       }
       renderJobs(true);
+      renderTranscribeJobs(true);
     }
 
     function collapseAll() {
       expandedJobs.clear();
       editingBoxes.clear();
       renderJobs(true);
+    }
+
+    function collapseAllTranscribe() {
+      expandedJobs.clear();
+      editingBoxes.clear();
+      renderTranscribeJobs(true);
     }
 
     function toggleEditBox(jobId, idx, event) {
@@ -819,6 +1162,7 @@
         editingBoxes.add(key);
       }
       renderJobs(true);
+      renderTranscribeJobs(true);
     }
 
     async function saveEditedBox(jobId, idx) {
@@ -837,7 +1181,7 @@
         });
         editingBoxes.delete(`${jobId}:${idx}`);
         showToast('💾 บันทึกการแก้ไขเรียบร้อย!');
-        await fetchJobs();
+        await fetchJobs(true);
       } catch (e) {
         showToast('❌ บันทึกไม่สำเร็จ');
       }
@@ -845,6 +1189,7 @@
 
     // Paste screenshot via Ctrl+V
     window.addEventListener('paste', (e) => {
+      if (activeWorkspaceMode !== 'news') return;
       const items = (e.clipboardData || e.originalEvent.clipboardData).items;
       const files = [];
       for (const item of items) {
@@ -906,13 +1251,13 @@
       }
       dupTimeout = setTimeout(async () => {
         try {
-          const res = await fetch(`/api/check-duplicate?url=${encodeURIComponent(m[0])}`);
+          const res = await fetch(`/api/check-duplicate?url=${encodeURIComponent(m[0])}&job_type=news`);
           const data = await res.json();
           if (data.duplicate) {
             document.getElementById('dup-emp').textContent = data.employee_name;
             document.getElementById('dup-view-btn').onclick = () => {
               expandedJobs.add(data.job_id);
-              renderJobs();
+              renderJobs(true);
               const card = document.getElementById(`job-card-${data.job_id}`);
               if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
             };
@@ -922,6 +1267,246 @@
           }
         } catch (err) {}
       }, 350);
+    }
+
+    // --- Video Transcript & Breakdown Form Helpers ---
+    function detectVideoPlatformClient(url) {
+      const low = (url || '').toLowerCase();
+      if (low.includes('youtube.com/shorts')) return { name: 'YouTube Shorts', icon: '▶️', key: 'YouTube' };
+      if (low.includes('youtube.com') || low.includes('youtu.be')) return { name: 'YouTube', icon: '▶️', key: 'YouTube' };
+      if (low.includes('tiktok.com')) return { name: 'TikTok', icon: '🎵', key: 'TikTok' };
+      if (low.includes('facebook.com') || low.includes('fb.watch')) {
+        return { name: low.includes('/reel') ? 'Facebook Reels' : 'Facebook Video', icon: '📱', key: 'Facebook' };
+      }
+      if (low.includes('instagram.com')) return { name: 'Instagram Reels', icon: '📸', key: 'Instagram' };
+      return { name: 'วิดีโอ', icon: '🎬', key: 'Other' };
+    }
+
+    function handleTranscribeUrlInput(val) {
+      clearTimeout(trDupTimeout);
+      const alertBox = document.getElementById('tr-dup-alert');
+      const badge = document.getElementById('tr-platform-badge');
+      const m = (val || '').match(/https?:\/\/[^\s"'<>)\]]+/);
+      if (!m) {
+        if (alertBox) alertBox.classList.add('hidden');
+        if (badge) badge.classList.add('hidden');
+        return;
+      }
+      const pInfo = detectVideoPlatformClient(m[0]);
+      if (badge) {
+        badge.textContent = `${pInfo.icon} ${pInfo.name}`;
+        badge.classList.remove('hidden');
+      }
+      trDupTimeout = setTimeout(async () => {
+        try {
+          const res = await fetch(`/api/check-duplicate?url=${encodeURIComponent(m[0])}&job_type=transcribe`);
+          const data = await res.json();
+          if (data.duplicate && alertBox) {
+            document.getElementById('tr-dup-emp').textContent = data.employee_name;
+            document.getElementById('tr-dup-view-btn').onclick = () => {
+              expandedJobs.add(data.job_id);
+              renderTranscribeJobs(true);
+              const card = document.getElementById(`job-card-${data.job_id}`);
+              if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            };
+            alertBox.classList.remove('hidden');
+          } else if (alertBox) {
+            alertBox.classList.add('hidden');
+          }
+        } catch (err) {}
+      }, 350);
+    }
+
+    function updateTranscribeCheckboxStyles() {
+      const cCtx = document.getElementById('tr-opt-context')?.checked;
+      const cSum = document.getElementById('tr-opt-summary-time')?.checked;
+      const cDlg = document.getElementById('tr-opt-dialogue')?.checked;
+
+      const cardCtx = document.getElementById('tr-card-context');
+      const cardSum = document.getElementById('tr-card-summary-time');
+      const cardDlg = document.getElementById('tr-card-dialogue');
+
+      if (cardCtx) {
+        cardCtx.className = cCtx
+          ? 'flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition bg-sky-500/15 border-sky-400 shadow-sm'
+          : 'flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition bg-slate-950/60 border-slate-800 opacity-75 hover:opacity-100';
+      }
+      if (cardSum) {
+        cardSum.className = cSum
+          ? 'flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition bg-emerald-500/15 border-emerald-400 shadow-sm'
+          : 'flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition bg-slate-950/60 border-slate-800 opacity-75 hover:opacity-100';
+      }
+      if (cardDlg) {
+        cardDlg.className = cDlg
+          ? 'flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition bg-amber-500/15 border-amber-400 shadow-sm'
+          : 'flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition bg-slate-950/60 border-slate-800 opacity-75 hover:opacity-100';
+      }
+    }
+
+    function setTranscribeCheckboxes(ctx, sumTime, dlg) {
+      const elCtx = document.getElementById('tr-opt-context');
+      const elSum = document.getElementById('tr-opt-summary-time');
+      const elDlg = document.getElementById('tr-opt-dialogue');
+      if (elCtx) elCtx.checked = Boolean(ctx);
+      if (elSum) elSum.checked = Boolean(sumTime);
+      if (elDlg) elDlg.checked = Boolean(dlg);
+      updateTranscribeCheckboxStyles();
+    }
+
+    function getSelectedTranscribeSkillSet() {
+      const opts = [];
+      if (document.getElementById('tr-opt-context')?.checked) opts.push('context');
+      if (document.getElementById('tr-opt-summary-time')?.checked) opts.push('summary_time');
+      if (document.getElementById('tr-opt-dialogue')?.checked) opts.push('dialogue');
+      if (opts.length === 0) return null;
+      return `transcribe:${opts.join(',')}`;
+    }
+
+    function appendTranscribeChip(text) {
+      const ta = document.getElementById('tr-focus-instruction');
+      if (!ta) return;
+      const cur = ta.value.trim();
+      ta.value = cur ? `${cur} / ${text}` : text;
+      ta.focus();
+    }
+
+    function clearTranscribeForm() {
+      const u = document.getElementById('tr-urls-input');
+      const f = document.getElementById('tr-focus-instruction');
+      const d = document.getElementById('tr-dup-alert');
+      const b = document.getElementById('tr-platform-badge');
+      if (u) u.value = '';
+      if (f) f.value = '';
+      if (d) d.classList.add('hidden');
+      if (b) b.classList.add('hidden');
+      setTranscribeCheckboxes(true, true, true);
+    }
+
+    async function handleTranscribeSubmit(e) {
+      e.preventDefault();
+      const rawNick = document.getElementById('employee-name').value.trim();
+      if (isPlaceholderNickname(rawNick)) {
+        openNicknameModal();
+        showToast('⚠️ กรุณาใส่ชื่อเล่นของคุณก่อนส่งถอดคลิป เพื่อระบุในคลังงานทีม');
+        return;
+      }
+      const urlsInput = (document.getElementById('tr-urls-input')?.value || '').trim();
+      if (!urlsInput) {
+        showToast('⚠️ กรุณาวางลิงก์วิดีโอ (YouTube, Reels, TikTok) ที่ต้องการถอด');
+        document.getElementById('tr-urls-input')?.focus();
+        return;
+      }
+      const skillSet = getSelectedTranscribeSkillSet();
+      if (!skillSet) {
+        showToast('⚠️ กรุณาติ๊กเลือกรูปแบบที่ต้องการถอดอย่างน้อย 1 ข้อ');
+        return;
+      }
+      const focusInstruction = (document.getElementById('tr-focus-instruction')?.value || '').trim();
+
+      const btn = document.getElementById('tr-submit-btn');
+      btn.disabled = true;
+      btn.innerHTML = '<span>⏳ กำลังส่งคลิปไปถอดที่คอมเครื่องแม่...</span>';
+
+      try {
+        const fd = new FormData();
+        fd.append('employee_name', rawNick);
+        fd.append('urls_input', urlsInput);
+        fd.append('raw_text', '');
+        fd.append('focus_instruction', focusInstruction);
+        fd.append('output_mode', 'video_transcribe');
+        fd.append('skill_set', skillSet);
+
+        const res = await fetch('/api/submit', { method: 'POST', body: fd });
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.detail || 'เกิดข้อผิดพลาด');
+        }
+        const out = await res.json();
+        if (out.job_id) {
+          expandedJobs.add(out.job_id);
+        }
+        clearTranscribeForm();
+        setTranscribeFilterMode('ALL');
+        showToast('🎙️ ส่งคลิปเข้าคิวถอดบทสนทนา & แยกประเด็นเรียบร้อย!');
+        await fetchJobs(true);
+      } catch (err) {
+        showToast('❌ ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<span>🎙️ เริ่มถอดบทสนทนา & แยกประเด็นวิดีโอ</span>';
+      }
+    }
+
+    function setTranscribeFilterMode(mode) {
+      transcribeFilterMode = mode;
+      const tabAll = document.getElementById('tr-tab-all');
+      const tabMine = document.getElementById('tr-tab-mine');
+      if (tabAll) {
+        tabAll.className = mode === 'ALL'
+          ? 'px-3 py-1.5 rounded-xl text-xs font-bold bg-sky-500 text-slate-950 shadow transition'
+          : 'px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-800/80 text-slate-300 hover:bg-slate-700 transition';
+      }
+      if (tabMine) {
+        tabMine.className = mode === 'MINE'
+          ? 'px-3 py-1.5 rounded-xl text-xs font-bold bg-sky-500 text-slate-950 shadow transition'
+          : 'px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-800/80 text-slate-300 hover:bg-slate-700 transition';
+      }
+      renderTranscribeJobs(true);
+    }
+
+    function setTranscribePlatformFilter(plat) {
+      transcribePlatformFilter = plat;
+      ['ALL', 'YouTube', 'Facebook', 'TikTok'].forEach((k) => {
+        const btn = document.getElementById(`tr-plat-${k}`);
+        if (!btn) return;
+        btn.className = k === plat
+          ? 'px-2.5 py-1 rounded-lg text-[11px] font-bold bg-sky-500/20 text-sky-300 border border-sky-500/40 transition'
+          : 'px-2.5 py-1 rounded-lg text-[11px] font-medium bg-slate-950 text-slate-400 border border-slate-800 hover:text-white transition';
+      });
+      renderTranscribeJobs(true);
+    }
+
+    function copyTimelineSegment(jobId, segIdx, event) {
+      if (event) event.stopPropagation();
+      const job = allJobs.find((x) => x.id === jobId);
+      const seg = job?.result?.topic_segments?.[segIdx];
+      if (!seg) return;
+      const txt = `[${seg.time_range || ''}] ${seg.title || ''}\n${seg.detail || ''}`.trim();
+      navigator.clipboard.writeText(txt);
+      showToast(`📋 คัดลอกประเด็นช่วง [${seg.time_range || ''}] เรียบร้อย!`);
+    }
+
+    function copyKeyQuote(jobId, qIdx, event) {
+      if (event) event.stopPropagation();
+      const job = allJobs.find((x) => x.id === jobId);
+      const qt = job?.result?.key_quotes?.[qIdx];
+      if (!qt) return;
+      const txt = `[${qt.timestamp || ''}] ${qt.speaker ? qt.speaker + ': ' : ''}"${qt.quote || ''}"`.trim();
+      navigator.clipboard.writeText(txt);
+      showToast('📋 คัดลอกประโยคเด็ดเรียบร้อย!');
+    }
+
+    function sendTranscriptToNewsForm(jobId, event) {
+      if (event) event.stopPropagation();
+      const job = allJobs.find((x) => x.id === jobId);
+      if (!job) return;
+      const firstUrl = (job.urls && job.urls[0]) || '';
+      const articles = getJobArticles(job);
+      const combinedText = articles.map((a) => `【${a.title}】\n${a.content}`).join('\n\n');
+
+      switchWorkspaceMode('news');
+      const urlInp = document.getElementById('urls-input');
+      const rawInp = document.getElementById('raw-text');
+      const focusInp = document.getElementById('focus-instruction');
+      if (urlInp) urlInp.value = firstUrl;
+      if (rawInp) {
+        rawInp.value = combinedText;
+        const detailsEl = rawInp.closest('details');
+        if (detailsEl) detailsEl.open = true;
+      }
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      setTimeout(() => { if (focusInp) focusInp.focus(); }, 300);
+      showToast('⚡ ส่งข้อมูลที่ถอดเข้าฟอร์มสั่งทำข่าวไวรัลแล้ว! เลือกโหมดหรือพิมพ์แนวที่อยากบิดต่อได้เลย');
     }
 
     async function handleSubmit(e) {
@@ -1294,7 +1879,13 @@
 
     function renderJobs(force = false) {
       const container = document.getElementById('jobs-container');
-      document.getElementById('count-all').textContent = allJobs.length;
+      const newsJobs = allJobs.filter((j) => !isTranscribeJob(j));
+      const trJobs = allJobs.filter((j) => isTranscribeJob(j));
+      document.getElementById('count-all').textContent = newsJobs.length;
+      const wsBadgeNews = document.getElementById('ws-badge-news');
+      const wsBadgeTr = document.getElementById('ws-badge-transcribe');
+      if (wsBadgeNews) wsBadgeNews.textContent = newsJobs.length;
+      if (wsBadgeTr) wsBadgeTr.textContent = trJobs.length;
 
       // Don't re-render while employee is actively editing a box
       const activeId = document.activeElement ? document.activeElement.id : null;
@@ -1307,14 +1898,14 @@
 
       const myName = (document.getElementById('employee-name').value || '').trim().toLowerCase();
       const myCount = myName
-        ? allJobs.filter((j) => (j.employee_name || '').trim().toLowerCase() === myName).length
+        ? newsJobs.filter((j) => (j.employee_name || '').trim().toLowerCase() === myName).length
         : 0;
       const countMineEl = document.getElementById('count-mine');
       if (countMineEl) countMineEl.textContent = myCount;
 
       const q = (document.getElementById('search-box').value || '').trim().toLowerCase();
 
-      const filtered = allJobs.filter((j) => {
+      const filtered = newsJobs.filter((j) => {
         if (filterMode === 'MINE' && (j.employee_name || '').trim().toLowerCase() !== myName) return false;
         if (q) {
           const articlesText = getJobArticles(j).map((a) => `${a.title} ${a.content}`).join(' ');
@@ -1737,6 +2328,469 @@
       }).join('');
     }
 
+    function renderTranscribeJobs(force = false) {
+      const container = document.getElementById('tr-jobs-container');
+      if (!container) return;
+
+      const trJobs = allJobs.filter((j) => isTranscribeJob(j));
+      const trCountAllEl = document.getElementById('tr-count-all');
+      if (trCountAllEl) trCountAllEl.textContent = trJobs.length;
+      const wsBadgeTr = document.getElementById('ws-badge-transcribe');
+      if (wsBadgeTr) wsBadgeTr.textContent = trJobs.length;
+
+      // Don't re-render while employee is actively editing a box
+      const activeId = document.activeElement ? document.activeElement.id : null;
+      if (activeId && activeId.startsWith('edit-box-')) return;
+
+      // Don't clobber active text selection during background 3s polling
+      if (!force && window.getSelection && window.getSelection().toString().trim().length > 0) {
+        return;
+      }
+
+      const myName = (document.getElementById('employee-name')?.value || '').trim().toLowerCase();
+      const myCount = myName
+        ? trJobs.filter((j) => (j.employee_name || '').trim().toLowerCase() === myName).length
+        : 0;
+      const trCountMineEl = document.getElementById('tr-count-mine');
+      if (trCountMineEl) trCountMineEl.textContent = myCount;
+
+      // Populate Employee Dropdown Filter
+      const empSelect = document.getElementById('tr-emp-filter');
+      let selectedEmpFilter = empSelect ? empSelect.value : 'ALL';
+      if (empSelect) {
+        const uniqueEmps = Array.from(new Set(trJobs.map((j) => (j.employee_name || '').trim()).filter(Boolean)));
+        const currentOptsSignature = uniqueEmps.join('|');
+        if (empSelect.dataset.sig !== currentOptsSignature) {
+          empSelect.dataset.sig = currentOptsSignature;
+          empSelect.innerHTML = `<option value="ALL">👥 พนักงานทุกคน (${trJobs.length})</option>` +
+            uniqueEmps.map((emp) => `<option value="${escapeHtml(emp)}">👤 ${escapeHtml(emp)}</option>`).join('');
+          if (uniqueEmps.includes(selectedEmpFilter)) {
+            empSelect.value = selectedEmpFilter;
+          } else {
+            selectedEmpFilter = 'ALL';
+          }
+        }
+      }
+
+      const q = (document.getElementById('tr-search-box')?.value || '').trim().toLowerCase();
+
+      const filtered = trJobs.filter((j) => {
+        if (transcribeFilterMode === 'MINE' && (j.employee_name || '').trim().toLowerCase() !== myName) return false;
+        if (selectedEmpFilter && selectedEmpFilter !== 'ALL' && (j.employee_name || '').trim() !== selectedEmpFilter) return false;
+        if (transcribePlatformFilter !== 'ALL') {
+          const firstUrl = (j.urls && j.urls[0]) || '';
+          const pInfo = detectVideoPlatformClient(firstUrl);
+          if (pInfo.key !== transcribePlatformFilter) return false;
+        }
+        if (q) {
+          const articlesText = getJobArticles(j).map((a) => `${a.title} ${a.content}`).join(' ');
+          const segsText = (j.result?.topic_segments || []).map((s) => `${s.time_range} ${s.title} ${s.detail}`).join(' ');
+          const quotesText = (j.result?.key_quotes || []).map((qt) => `${qt.timestamp} ${qt.speaker} ${qt.quote}`).join(' ');
+          const hay = [
+            j.employee_name,
+            j.focus_instruction,
+            ...(j.urls || []),
+            j.result?.headline,
+            articlesText,
+            segsText,
+            quotesText,
+          ].join(' ').toLowerCase();
+          if (!hay.includes(q)) return false;
+        }
+        return true;
+      });
+
+      const sig = JSON.stringify({
+        transcribeFilterMode,
+        transcribePlatformFilter,
+        selectedEmpFilter,
+        q,
+        myName,
+        exp: Array.from(expandedJobs),
+        edit: Array.from(editingBoxes),
+        style: selectedJobStyle,
+        jobs: filtered.map((j) => [
+          j.id,
+          j.status,
+          j.progress_pct,
+          j.progress_text,
+          j.employee_name,
+          j.result?.headline,
+          (j.result?.articles || []).map((a) => (a.content || '').length),
+        ]),
+      });
+      if (!force && sig === lastTranscribeSignature) {
+        return;
+      }
+      lastTranscribeSignature = sig;
+
+      if (filtered.length === 0) {
+        container.innerHTML = `
+          <div class="bg-slate-900/50 border border-slate-800/80 rounded-2xl p-10 text-center space-y-2">
+            <div class="text-2xl">🎙️</div>
+            <div class="text-slate-300 text-xs font-semibold">ยังไม่มีรายการถอดบทสนทนาวิดีโอในหมวดนี้</div>
+            <div class="text-slate-500 text-[11px]">วางลิงก์ YouTube, Reels หรือ TikTok ที่ฝั่งซ้ายแล้วติ๊กเลือกรูปแบบที่ต้องการถอดได้เลย</div>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = filtered.map((j) => {
+        const isDone = j.status === 'completed';
+        const isFailed = j.status === 'failed';
+        const isExpanded = expandedJobs.has(j.id);
+        const res = j.result || {};
+        const shortTime = formatShortTime(j.created_at);
+        const skillSetTag = getJobSkillSetTag(j);
+        const creatorName = (j.employee_name || '').trim() || 'ยังไม่ระบุชื่อ';
+        const isMine = myName && creatorName.toLowerCase() === myName;
+        const creatorBadgeCls = isMine
+          ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+          : 'bg-sky-500/15 text-sky-300 border-sky-500/35';
+
+        const firstUrl = (j.urls && j.urls[0]) || '';
+        const pInfo = detectVideoPlatformClient(firstUrl);
+        const vDuration = res.video_duration || res.metadata?.video_duration || '';
+
+        // 1. Active / Queued Transcribe Card
+        if (!isDone && !isFailed) {
+          return `
+            <div id="job-card-${j.id}" class="bg-slate-900 border border-sky-500/40 rounded-2xl px-4 py-3.5 shadow-md space-y-2">
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <div class="flex items-center gap-2">
+                  <span class="w-2 h-2 rounded-full bg-sky-400 animate-ping"></span>
+                  <span class="text-xs font-semibold text-sky-300">${escapeHtml(j.progress_text || 'กำลังดาวน์โหลดและถอดบทสนทนาวิดีโอ...')} (${j.progress_pct || 10}%)</span>
+                </div>
+                <div class="flex flex-wrap items-center gap-1.5 text-xs text-slate-400">
+                  <span class="px-2.5 py-0.5 rounded-lg border text-[11px] font-bold ${creatorBadgeCls}">👤 ${escapeHtml(creatorName)}</span>
+                  <span class="px-2 py-0.5 rounded-md bg-slate-800 text-[11px] text-slate-200">${pInfo.icon} ${escapeHtml(pInfo.name)}</span>
+                  <span class="px-2 py-0.5 rounded-md bg-sky-500/15 border border-sky-500/30 text-[11px] font-semibold text-sky-300">${escapeHtml(skillSetTag)}</span>
+                  <span>• ${escapeHtml(shortTime)}</span>
+                  <button onclick="deleteJob('${j.id}', event)" class="text-slate-500 hover:text-red-400 px-1" title="ยกเลิก/ลบ">✕</button>
+                </div>
+              </div>
+              ${j.focus_instruction ? `
+                <div class="text-[11px] text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-lg px-2.5 py-1">
+                  💬 โจทย์เน้นพิเศษ: ${escapeHtml(j.focus_instruction)}
+                </div>
+              ` : ''}
+              ${firstUrl ? `<div class="text-[11px] text-slate-400 truncate">🔗 ${escapeHtml(firstUrl)}</div>` : ''}
+              <div class="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                <div class="bg-gradient-to-r from-sky-400 to-emerald-400 h-full transition-all duration-500" style="width: ${j.progress_pct || 10}%"></div>
+              </div>
+            </div>
+          `;
+        }
+
+        // 2. Failed Card
+        if (isFailed) {
+          return `
+            <div id="job-card-${j.id}" class="bg-slate-900 border border-red-500/40 rounded-2xl px-4 py-3.5 flex flex-wrap items-center justify-between gap-3">
+              <div class="min-w-0 flex-1">
+                <div class="text-xs font-bold text-red-300">⚠️ ${escapeHtml(j.progress_text || res.raw_news || 'เกิดข้อผิดพลาดในการถอดคลิป')}</div>
+                <div class="text-[11px] text-sky-300 mt-0.5">👤 ${escapeHtml(creatorName)} • ${pInfo.icon} ${escapeHtml(pInfo.name)} • ${escapeHtml(skillSetTag)}</div>
+              </div>
+              <div class="flex items-center gap-2 shrink-0">
+                <button onclick="retryJob('${j.id}', event)"
+                  class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-3 py-1 rounded-xl text-xs transition">
+                  🔁 ส่งถอดใหม่
+                </button>
+                <button onclick="deleteJob('${j.id}', event)"
+                  class="bg-slate-800 hover:bg-red-950 text-slate-300 hover:text-red-300 px-2.5 py-1 rounded-xl text-xs border border-slate-700">
+                  🗑️
+                </button>
+              </div>
+            </div>
+          `;
+        }
+
+        const articles = getJobArticles(j);
+        const headline = res.headline || (articles[0] && articles[0].title) || 'สรุปบทสนทนาและแยกประเด็นวิดีโอ';
+        const previewSnippet = (articles[0] ? articles[0].content : (res.raw_news || '')).replace(/\s+/g, ' ').slice(0, 110);
+        const topicSegments = Array.isArray(res.topic_segments) ? res.topic_segments : [];
+        const keyQuotes = Array.isArray(res.key_quotes) ? res.key_quotes : [];
+
+        // 3. Collapsed Completed Row
+        if (!isExpanded) {
+          return `
+            <div id="job-card-${j.id}" onclick="toggleExpandJob('${j.id}')"
+              class="group bg-slate-900/90 hover:bg-slate-800/80 border border-slate-800 hover:border-sky-500/50 rounded-2xl px-4 py-3.5 cursor-pointer transition flex flex-wrap sm:flex-nowrap items-center justify-between gap-3">
+              <div class="min-w-0 flex-1 space-y-1">
+                <div class="flex flex-wrap items-center gap-1.5">
+                  <span class="px-2 py-0.5 rounded-md bg-slate-800 text-slate-200 text-[10px] font-bold border border-slate-700">
+                    ${pInfo.icon} ${escapeHtml(pInfo.name)}${vDuration ? ` • ⏱️ ${escapeHtml(vDuration)}` : ''}
+                  </span>
+                  <h3 class="text-sm font-bold text-slate-100 group-hover:text-white truncate">${escapeHtml(headline)}</h3>
+                  <span class="shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold border ${creatorBadgeCls}">
+                    👤 ${escapeHtml(creatorName)}
+                  </span>
+                  <span class="shrink-0 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-sky-500/15 text-sky-300 border border-sky-500/30">
+                    ${escapeHtml(skillSetTag)}
+                  </span>
+                </div>
+                <p class="text-xs text-slate-400 truncate">
+                  ${escapeHtml(previewSnippet)}...
+                </p>
+              </div>
+
+              <div class="flex items-center gap-1.5 shrink-0">
+                <button onclick="sendTranscriptToNewsForm('${j.id}', event)"
+                  class="bg-amber-500/20 hover:bg-amber-400 text-amber-300 hover:text-slate-950 border border-amber-500/40 font-bold px-2.5 py-1 rounded-xl text-[11px] transition"
+                  title="ส่งข้อมูลที่ถอดจากคลิปนี้ไปเขียนข่าวไวรัลหรือบิดประเด็นต่อทันที">
+                  ⚡ ต่อยอดทำข่าว
+                </button>
+                <button onclick="copyAllJobArticles('${j.id}', event)"
+                  class="bg-sky-500/15 hover:bg-sky-500 text-sky-300 hover:text-slate-950 border border-sky-500/30 font-semibold px-2.5 py-1 rounded-xl text-[11px] transition">
+                  📋 คัดลอก
+                </button>
+                <span class="text-slate-400 group-hover:text-white text-xs px-2 py-1 rounded-lg bg-slate-800/60">
+                  ▼ เปิดดู
+                </span>
+              </div>
+            </div>
+          `;
+        }
+
+        // 4. Expanded Completed Video Transcript Card
+        const sheets = res.contact_sheets || [];
+        const distinctStyles = Array.from(new Set(articles.map((a) => a.style_id).filter(Boolean)));
+        const hasMultiStyles = distinctStyles.length > 1;
+        const rawSel = selectedJobStyle[j.id] || 'ALL5';
+        const activeStyleFilter = (rawSel !== 'ALL5' && !distinctStyles.includes(rawSel)) ? 'ALL5' : rawSel;
+        let visibleArticles = (hasMultiStyles && activeStyleFilter !== 'ALL5')
+          ? articles.filter((a) => a.style_id === activeStyleFilter)
+          : articles;
+        if (visibleArticles.length === 0) visibleArticles = articles;
+
+        const sectionTabsHtml = hasMultiStyles ? `
+          <div class="bg-slate-950/90 border border-sky-500/30 rounded-xl p-3 space-y-2">
+            <div class="flex flex-wrap items-center justify-between gap-2 text-xs">
+              <span class="font-bold text-sky-300">🎛️ เลือกดูเฉพาะส่วนที่ต้องการ (${articles.length} ส่วนที่ถอดจากคลิป):</span>
+            </div>
+            <div class="flex flex-wrap gap-1.5">
+              <button type="button" onclick="selectJobStyleTab('${j.id}', 'ALL5', event)"
+                class="px-2.5 py-1.5 rounded-lg text-xs border transition ${
+                  activeStyleFilter === 'ALL5'
+                    ? 'bg-sky-400 text-slate-950 font-bold border-sky-300 shadow'
+                    : 'bg-slate-900 hover:bg-slate-800 text-sky-300 border-sky-500/40'
+                }">
+                👁️ ดูครบทุกส่วน (${articles.length})
+              </button>
+              ${distinctStyles.map((sid) => {
+                const isSel = activeStyleFilter === sid;
+                return `
+                  <button type="button" onclick="selectJobStyleTab('${j.id}', '${sid}', event)"
+                    class="px-2.5 py-1.5 rounded-lg text-xs border transition ${
+                      isSel
+                        ? 'bg-emerald-500 text-slate-950 font-bold border-emerald-400 shadow'
+                        : 'bg-slate-900 hover:bg-slate-800 text-slate-200 border-slate-700'
+                    }">
+                    ${escapeHtml(SKILL_SET_LABELS[sid] || sid)}
+                  </button>
+                `;
+              }).join('')}
+            </div>
+          </div>
+        ` : '';
+
+        const timelineSegmentsHtml = topicSegments.length > 0 ? `
+          <div class="bg-slate-950/90 border border-emerald-500/35 rounded-xl p-4 space-y-2.5">
+            <div class="flex items-center justify-between gap-2">
+              <h4 class="text-xs font-bold text-emerald-300 flex items-center gap-1.5">
+                <span>⏱️ ไทม์ไลน์แยกประเด็นสำคัญตามช่วงนาที (${topicSegments.length} ช่วงเวลา)</span>
+              </h4>
+              <span class="text-[10px] text-slate-400">คลิกปุ่มคัดลอกแยกแต่ละประเด็นได้ทันที</span>
+            </div>
+            <div class="divide-y divide-slate-800/80">
+              ${topicSegments.map((seg, sIdx) => `
+                <div class="py-2.5 first:pt-0 last:pb-0 flex flex-col sm:flex-row sm:items-start justify-between gap-2.5">
+                  <div class="space-y-1 flex-1 min-w-0">
+                    <div class="flex flex-wrap items-center gap-2">
+                      <span class="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-mono text-[11px] font-bold">
+                        ⏱️ ${escapeHtml(seg.time_range || '00:00')}
+                      </span>
+                      <span class="text-xs font-bold text-white">${escapeHtml(seg.title || '')}</span>
+                    </div>
+                    <p class="text-xs text-slate-300 leading-relaxed pl-1 whitespace-pre-line">${escapeHtml(seg.detail || '')}</p>
+                  </div>
+                  <button type="button" onclick="copyTimelineSegment('${j.id}', ${sIdx}, event)"
+                    class="shrink-0 bg-slate-800 hover:bg-emerald-500 text-slate-200 hover:text-slate-950 border border-slate-700 font-semibold px-2.5 py-1 rounded-lg text-[11px] transition">
+                    📋 คัดลอกช่วงนี้
+                  </button>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        ` : '';
+
+        const keyQuotesHtml = keyQuotes.length > 0 ? `
+          <div class="bg-slate-950/90 border border-amber-500/35 rounded-xl p-4 space-y-2.5">
+            <div class="flex items-center justify-between gap-2">
+              <h4 class="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+                <span>🔥 ประโยคเด็ด / โควทคำพูดสำคัญจากคลิป (${keyQuotes.length} ประโยค)</span>
+              </h4>
+              <span class="text-[10px] text-slate-400">หยิบไปขึ้นพาดหัวหรือใส่ในข่าวได้ทันที</span>
+            </div>
+            <div class="grid grid-cols-1 gap-2">
+              ${keyQuotes.map((qt, qIdx) => `
+                <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                  <div class="space-y-0.5 flex-1 min-w-0">
+                    <div class="flex items-center gap-2 text-[11px]">
+                      <span class="px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 font-mono font-bold">
+                        [${escapeHtml(qt.timestamp || '00:00')}]
+                      </span>
+                      <span class="font-bold text-sky-300">${escapeHtml(qt.speaker || 'ผู้พูดในคลิป')}</span>
+                    </div>
+                    <div class="text-xs text-white font-medium leading-relaxed">"${escapeHtml(qt.quote || '')}"</div>
+                  </div>
+                  <button type="button" onclick="copyKeyQuote('${j.id}', ${qIdx}, event)"
+                    class="shrink-0 bg-amber-500/20 hover:bg-amber-400 text-amber-300 hover:text-slate-950 border border-amber-500/40 font-bold px-2.5 py-1 rounded-lg text-[11px] transition">
+                    📋 คัดลอกโควท
+                  </button>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        ` : '';
+
+        const articlesHtml = visibleArticles.map((art) => {
+          const idx = art.idx;
+          const isEditingThis = editingBoxes.has(`${j.id}:${idx}`);
+          const stat = countStats(art.content);
+          const boxBorderCls = art.style_id === 'transcribe_context'
+            ? 'border-sky-500/40'
+            : (art.style_id === 'transcribe_summary_time' ? 'border-emerald-500/40' : 'border-amber-500/40');
+          return `
+            <div class="bg-slate-950/90 border ${boxBorderCls} rounded-xl overflow-hidden">
+              <div class="bg-slate-900/90 px-4 py-2.5 border-b border-slate-800/90 flex flex-wrap items-center justify-between gap-2">
+                <div class="flex flex-wrap items-center gap-2 min-w-0">
+                  <span class="px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-sky-500/20 text-sky-300 border border-sky-500/40">
+                    ${escapeHtml(art.label)}
+                  </span>
+                  <span class="px-2 py-0.5 rounded-md text-[10px] bg-slate-800 text-emerald-300 border border-slate-700">
+                    📏 ~${stat.words} คำ • ${stat.lines} บรรทัด
+                  </span>
+                  <span class="text-xs font-semibold text-slate-200 truncate">${escapeHtml(art.title)}</span>
+                </div>
+                <div class="flex items-center gap-1.5 shrink-0">
+                  <button onclick="copyArticleBox('${j.id}', ${idx}, event)"
+                    class="bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold px-3 py-1 rounded-lg text-xs shadow transition">
+                    📋 คัดลอกส่วนนี้
+                  </button>
+                  <button onclick="toggleEditBox('${j.id}', ${idx}, event)"
+                    class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-2.5 py-1 rounded-lg text-xs border border-slate-700 transition">
+                    ${isEditingThis ? 'ยกเลิก' : '✏️ แก้ไข'}
+                  </button>
+                </div>
+              </div>
+              <div class="p-4">
+                ${isEditingThis ? `
+                  <div class="space-y-2">
+                    <textarea id="edit-box-${j.id}-${idx}" rows="10"
+                      class="w-full bg-slate-900 border border-sky-500/60 rounded-xl p-3.5 text-slate-100 news-prose focus:outline-none">${escapeHtml(art.content)}</textarea>
+                    <div class="flex justify-end">
+                      <button onclick="saveEditedBox('${j.id}', ${idx})"
+                        class="bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold px-4 py-1.5 rounded-xl text-xs">
+                        💾 บันทึกการแก้ไข
+                      </button>
+                    </div>
+                  </div>
+                ` : `
+                  <div class="text-slate-100 news-prose whitespace-pre-line">${escapeHtml(art.content)}</div>
+                `}
+              </div>
+            </div>
+          `;
+        }).join('');
+
+        return `
+          <div id="job-card-${j.id}" class="bg-slate-900 border border-sky-500/45 rounded-2xl overflow-hidden shadow-2xl">
+            <!-- Expanded Header -->
+            <div onclick="toggleExpandJob('${j.id}')"
+              class="bg-slate-800/70 hover:bg-slate-800 px-5 py-3.5 cursor-pointer flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 transition">
+              <div class="flex items-center gap-2.5 min-w-0 flex-1">
+                <span class="text-sky-400 text-xs">▼</span>
+                <span class="px-2 py-0.5 rounded-md bg-slate-950 text-slate-200 text-xs font-bold border border-slate-700 shrink-0">
+                  ${pInfo.icon} ${escapeHtml(pInfo.name)}${vDuration ? ` • ⏱️ ${escapeHtml(vDuration)}` : ''}
+                </span>
+                <h3 class="text-sm sm:text-base font-bold text-white leading-snug truncate">${escapeHtml(headline)}</h3>
+              </div>
+              <div class="flex flex-wrap items-center gap-1.5 shrink-0" onclick="event.stopPropagation()">
+                <span class="px-2.5 py-0.5 rounded-lg text-[11px] font-bold border ${creatorBadgeCls}">
+                  👤 ถอดโดย: ${escapeHtml(creatorName)} ${shortTime ? `• ${escapeHtml(shortTime)}` : ''}
+                </span>
+                <button onclick="assignJobCreator('${j.id}', event)"
+                  class="px-2 py-0.5 rounded-lg text-[11px] bg-slate-900 hover:bg-slate-700 text-slate-300 border border-slate-700 transition">
+                  ✏️ เปลี่ยนชื่อคนทำ
+                </button>
+                <button onclick="sendTranscriptToNewsForm('${j.id}', event)"
+                  class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-3 py-1 rounded-xl text-xs shadow transition"
+                  title="ส่งข้อมูลที่ถอดจากคลิปนี้ไปเข้าฟอร์มสั่งทำข่าวไวรัลหรือบิดประเด็นต่อทันที">
+                  ⚡ ส่งไปเขียนข่าวไวรัล / บิดประเด็นต่อ
+                </button>
+                <button onclick="copyAllJobArticles('${j.id}', event)"
+                  class="bg-slate-900 hover:bg-slate-700 text-slate-200 px-2.5 py-1 rounded-xl text-xs border border-slate-700 transition">
+                  📋 คัดลอกทั้งหมด
+                </button>
+                <button onclick="retryJob('${j.id}', event)"
+                  class="bg-slate-900 hover:bg-slate-700 text-slate-300 px-2 py-1 rounded-xl text-xs border border-slate-700 transition" title="ส่งถอดใหม่อีกครั้ง">
+                  🔁
+                </button>
+                <button onclick="deleteJob('${j.id}', event)"
+                  class="bg-slate-900 hover:bg-red-950 text-slate-400 hover:text-red-300 px-2 py-1 rounded-xl text-xs border border-slate-700 transition" title="ลบรายการนี้">
+                  🗑️
+                </button>
+                <button onclick="toggleExpandJob('${j.id}')" class="text-slate-400 hover:text-white text-xs px-1.5 py-1">
+                  ▲ ย่อ
+                </button>
+              </div>
+            </div>
+
+            <!-- Expanded Body -->
+            <div class="p-5 space-y-4">
+              <!-- Video Source Bar -->
+              <div class="bg-slate-950/70 px-3.5 py-2.5 rounded-xl border border-slate-800 flex flex-wrap items-center justify-between gap-2 text-xs">
+                <div class="flex flex-wrap items-center gap-2 min-w-0">
+                  <span class="px-2 py-0.5 rounded bg-sky-500/15 border border-sky-500/30 text-sky-300 font-semibold text-[11px]">${escapeHtml(skillSetTag)}</span>
+                  ${firstUrl ? `<a href="${escapeHtml(firstUrl)}" target="_blank" class="text-sky-400 hover:underline truncate">🔗 เปิดดูคลิปต้นฉบับ (${escapeHtml(firstUrl)})</a>` : ''}
+                </div>
+                ${j.focus_instruction ? `<span class="text-amber-300 font-medium">💬 โจทย์เน้นพิเศษ: "${escapeHtml(j.focus_instruction)}"</span>` : ''}
+              </div>
+
+              <!-- Interactive Topic Timeline with Timestamps -->
+              ${timelineSegmentsHtml}
+
+              <!-- Key Quotes Section -->
+              ${keyQuotesHtml}
+
+              <!-- Section Selector Tabs -->
+              ${sectionTabsHtml}
+
+              <!-- Extracted Content Boxes -->
+              <div class="space-y-3.5">
+                ${articlesHtml}
+              </div>
+
+              <!-- Frame Contact Sheets Preview -->
+              ${sheets.length > 0 ? `
+                <details ${openDetailsKeys.has('trmedia:' + j.id) ? 'open' : ''} ontoggle="handleDetailsToggle('trmedia:${j.id}', this.open)" class="bg-slate-950/50 border border-slate-800/80 rounded-xl px-3.5 py-2 text-xs">
+                  <summary class="cursor-pointer font-medium text-slate-400 hover:text-slate-200">
+                    🎞️ ดูภาพเฟรมทุกวินาทีจากคลิปพร้อมตัวเลขเวลา (${sheets.length} แผ่น)
+                  </summary>
+                  <div class="mt-3 pt-3 border-t border-slate-800/80 flex flex-wrap gap-2">
+                    ${sheets.map((m) => `
+                      <img src="${m}" onclick="openImageModal('${m}', event)"
+                        class="h-24 w-auto rounded-lg border border-slate-700 hover:border-sky-400 cursor-pointer object-cover transition" />
+                    `).join('')}
+                  </div>
+                </details>
+              ` : ''}
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
     async function fetchSystemInfo() {
       if (isFetchingSysInfo) return;
       isFetchingSysInfo = true;
@@ -1777,12 +2831,15 @@
         const data = await jobsRes.json();
         allJobs = data.jobs || [];
         renderJobs(forceRender);
+        renderTranscribeJobs(forceRender);
       } catch (e) {
       } finally {
         isFetchingJobs = false;
       }
     }
 
+    switchWorkspaceMode(activeWorkspaceMode);
+    updateTranscribeCheckboxStyles();
     fetchSystemInfo();
     fetchJobs(true);
     setInterval(() => {
