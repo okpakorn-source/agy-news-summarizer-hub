@@ -24,8 +24,9 @@ def _load_dotenv_if_exists():
 
 _load_dotenv_if_exists()
 
-SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://zkfwnfqefikmctdpyeui.supabase.co").rstrip("/")
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://janbuyrvlwgcbkjydwrv.supabase.co").rstrip("/")
 SUPABASE_KEY = os.environ.get("SUPABASE_SECRET_KEY", "")
+SUPABASE_HUB_SECRET = os.environ.get("SUPABASE_HUB_SECRET", "")
 BUCKET_NAME = "agy-news-hub"
 JOB_PREFIX = "agy_hub_job:"
 TOPIC_PREFIX = "agy_hub_topic:"
@@ -58,6 +59,8 @@ def _headers(extra: Optional[Dict[str, str]] = None) -> Dict[str, str]:
         "Authorization": f"Bearer {SUPABASE_KEY}",
         "Content-Type": "application/json",
     }
+    if SUPABASE_HUB_SECRET:
+        h["x-hub-secret"] = SUPABASE_HUB_SECRET
     if extra:
         h.update(extra)
     return h
@@ -73,6 +76,8 @@ def upload_file_to_supabase(storage_path: str, content_bytes: bytes, content_typ
         "Content-Type": content_type,
         "x-upsert": "true",
     }
+    if SUPABASE_HUB_SECRET:
+        headers["x-hub-secret"] = SUPABASE_HUB_SECRET
     try:
         resp = _SESSION.post(url, headers=headers, data=content_bytes, timeout=30)
         if resp.status_code not in (200, 201):

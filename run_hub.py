@@ -9,7 +9,7 @@ if hasattr(sys.stdout, "reconfigure"):
 if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
-VERCEL_PUBLIC_URL = "https://agy-news-summarizer-hub.vercel.app"
+VERCEL_PUBLIC_URL = "https://agy-news-hub.vercel.app"
 
 
 def get_lan_ip() -> str:

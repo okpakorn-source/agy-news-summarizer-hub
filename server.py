@@ -45,7 +45,7 @@ JOBS_DIR = BASE_DIR / "jobs_data"
 STATIC_DIR = BASE_DIR / "static"
 DB_PATH = BASE_DIR / "jobs.db"
 TUNNEL_FILE = BASE_DIR / "tunnel_url.txt"
-VERCEL_PUBLIC_URL = "https://agy-news-summarizer-hub.vercel.app"
+VERCEL_PUBLIC_URL = os.environ.get("VERCEL_PUBLIC_URL", "https://agy-news-hub.vercel.app")
 
 app = FastAPI(title="Antigravity News Summarizer Hub (สำหรับทีมข่าว 10+ คน)")
 if STATIC_DIR.exists():

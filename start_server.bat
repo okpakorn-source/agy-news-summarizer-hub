@@ -6,7 +6,7 @@ title Antigravity News Summarizer Hub (เครื่องแม่รับ�
 cd /d "%~dp0"
 echo ====================================================================
 echo   กำลังเปิดระบบรับงานข่าว Antigravity News Summarizer Hub บนคอมเครื่องแม่
-echo   ลิงก์ส่งให้พนักงาน: https://agy-news-summarizer-hub.vercel.app
+echo   ลิงก์ส่งให้พนักงาน: https://agy-news-hub.vercel.app
 echo   หน้าจอควบคุมของคุณ: http://localhost:8080
 echo ====================================================================
 start "" "http://localhost:8080"

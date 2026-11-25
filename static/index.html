@@ -93,7 +93,7 @@
         <div class="flex flex-wrap items-center gap-4">
           <div class="flex items-center gap-2">
             <span class="text-slate-400">🌐 ลิงก์เว็บถาวรสำหรับพนักงาน (เปิดได้ทุกที่/มือถือ):</span>
-            <code id="tunnel-url-display" class="bg-slate-900 border border-slate-800 px-2.5 py-1 rounded-lg text-emerald-300 font-mono">https://agy-news-summarizer-hub.vercel.app</code>
+            <code id="tunnel-url-display" class="bg-slate-900 border border-slate-800 px-2.5 py-1 rounded-lg text-emerald-300 font-mono">https://agy-news-hub.vercel.app</code>
             <button onclick="copyTextById('tunnel-url-display')" class="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-semibold px-2.5 py-1 rounded-lg">คัดลอก</button>
           </div>
           <div class="flex items-center gap-2">
@@ -2799,7 +2799,7 @@
         if (!res.ok) return;
         const data = await res.json();
         document.getElementById('lan-url-display').textContent = data.lan_url || 'http://localhost:8080';
-        document.getElementById('tunnel-url-display').textContent = data.tunnel_url || 'https://agy-news-summarizer-hub.vercel.app';
+        document.getElementById('tunnel-url-display').textContent = data.tunnel_url || 'https://agy-news-hub.vercel.app';
         document.getElementById('stat-processing').textContent = data.stats?.processing || 0;
         document.getElementById('stat-queued').textContent = data.stats?.queued || 0;
         document.getElementById('stat-completed').textContent = data.stats?.completed || 0;
